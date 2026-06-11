@@ -46,10 +46,10 @@ export function LoginPanel() {
     <Card className="w-full max-w-md border-white/60 bg-white/85 text-foreground shadow-2xl backdrop-blur-md">
       <CardHeader className="text-center">
         <Image
-          src="/santa-cruz-seal.png"
+          src="/logo2-nobg.png"
           alt="Official seal of the Municipality of Santa Cruz, Zambales"
-          width={88}
-          height={88}
+          width={96}
+          height={96}
           priority
           className="mx-auto drop-shadow-sm"
         />
