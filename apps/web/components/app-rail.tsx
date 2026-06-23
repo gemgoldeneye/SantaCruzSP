@@ -13,6 +13,7 @@ const GATE: Record<string, { office?: string; exec?: boolean }> = {
   '/sessions': { office: 'sanggunian' },
   '/tracking': { office: 'sanggunian' },
   '/prangkisa': { office: 'mtop' },
+  '/setup': { exec: true },
   '/accounts': { exec: true },
   '/roles': { exec: true },
   '/logs': { exec: true },
