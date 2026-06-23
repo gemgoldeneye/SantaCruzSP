@@ -1,14 +1,12 @@
-// Dev seed — runs as the OWNER role (bypasses RLS). Provisions the Zambales
-// province hub + the Santa Cruz municipal tenant, demo staff accounts (the 5 legacy
-// roles + admin), and representative reference/demo documents with change_log
-// rows so the frontends can pull them.
+// Bootstrap seed — runs as the OWNER role (bypasses RLS). Provisions the Zambales
+// province hub + the Santa Cruz municipal tenant, the 5 platform roles, and ONE
+// superadmin (from SUPERADMIN_* env). A TRUE blank slate: the LGU sets up its own
+// roster, committees, zones, TODAs, fees, projects and accounts in-app.
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { hash as argonHash } from '@node-rs/argon2';
 import { v7 as uuidv7 } from 'uuid';
-import type { OfficeRoleKey, WorkflowInstance } from '@gelabs/sp/contracts';
-import { getWorkflow } from '@gelabs/sp/contracts';
-import '@gelabs/sp/modules'; // register SP workflows so getWorkflow() resolves during seeding
+import type { OfficeRoleKey } from '@gelabs/sp/contracts';
 import * as schema from '@gelabs/sp/data';
 import { santaCruzConfig } from '@lgu/santacruz';
 import { env } from '../env.js';
@@ -17,17 +15,7 @@ const sql = postgres(env.ownerDatabaseUrl, { max: 4 });
 const db = drizzle(sql, { schema });
 
 const PROVINCE = env.provinceTenant;       // 'zambales-province'
-const TENANT = env.defaultTenant;             // 'santacruz-zambales'
-const PASSWORD = 'demo1234';
-
-// Staff users are DERIVED from the per-LGU `config.demoAccounts` + the platform
-// ROLES below (memberships / title / offices come from the account's role) — the
-// concrete `USERS` list is built right after ROLES. No municipality names here.
-interface DemoUser {
-  username: string; name: string; role: string; roleRef: string; initials: string;
-  offices: string[]; memberships: { office: string; officeRole: OfficeRoleKey }[];
-  title: { fil: string; en: string };
-}
+const TENANT = env.defaultTenant;          // 'santacruz-zambales'
 
 const ALL_PERMS = ['page:search', 'page:scan', 'page:sessions', 'page:tracking', 'page:prangkisa', 'page:analytics', 'page:accounts', 'page:roles', 'page:logs', 'documents:create', 'sessions:manage', 'accounts:manage', 'roles:manage'];
 
@@ -45,54 +33,8 @@ const ROLES: RoleSeed[] = [
   { key: 'OPERATOR', name: 'Window Clerk (Operator)', description: 'MTOP/treasury window clerk — read-mostly, cashiering.', isStaff: false, roleKey: 'operator', offices: [], memberships: [{ office: 'mtop', officeRole: 'inspector' }, { office: 'treasury', officeRole: 'cashier' }], permissions: ['page:search', 'page:prangkisa'], title: { fil: 'Klerk', en: 'Clerk' } },
 ];
 
-// Avatar initials from a display name (first letters of the first two words).
-function initialsOf(name: string): string {
-  const parts = name.split(/\s+/).filter(Boolean);
-  return parts.slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '??';
-}
-
-// Concrete staff accounts to provision — derived from the per-LGU config.demoAccounts,
-// with role-driven memberships/title/offices resolved from the platform ROLES above.
-const roleByRoleKey = new Map(ROLES.map((r) => [r.roleKey, r]));
-const USERS: DemoUser[] = (santaCruzConfig.demoAccounts ?? []).map((a) => {
-  const r = roleByRoleKey.get(a.role);
-  return {
-    username: a.email, name: a.name, role: a.role,
-    roleRef: r?.key ?? 'MEMBER',
-    initials: a.initials ?? initialsOf(a.name),
-    offices: r?.offices ?? [],
-    memberships: r?.memberships ?? [],
-    title: r?.title ?? { fil: 'Kawani', en: 'Staff' },
-  };
-});
-
-async function seedDoc(
-  tenantId: string, collection: string, ref: string | null, doc: Record<string, unknown>,
-): Promise<string> {
-  const id = uuidv7();
-  await db.insert(schema.documents).values({
-    tenantId, collection, id, ref, doc, docVersion: 1, rowVersion: 1,
-  });
-  await db.insert(schema.changeLog).values({
-    tenantId, collection, docId: id, op: 'create', rowVersion: 1, origin: 'seed',
-  });
-  const wf = doc.wf as WorkflowInstance | undefined;
-  if (wf && getWorkflow(wf.def)) {
-    const def = getWorkflow(wf.def)!;
-    const completed = wf.current >= def.steps.length;
-    await db.insert(schema.workflowInstances).values({
-      tenantId, collection, docId: id, defKey: wf.def,
-      currentStep: wf.current, completed,
-      currentOffice: completed ? null : def.steps[wf.current]?.office ?? null,
-    });
-  }
-  return id;
-}
-
-const wfAt = (defKey: string, current: number): WorkflowInstance => ({ def: defKey, current, history: [] });
-
 async function main(): Promise<void> {
-  console.log(`Seeding ${santaCruzConfig.municipality.province} province + ${santaCruzConfig.municipality.name}…`);
+  console.log(`Bootstrapping ${santaCruzConfig.municipality.province} province + ${santaCruzConfig.municipality.name}…`);
 
   await db.insert(schema.tenants).values({
     id: PROVINCE, name: `Province of ${santaCruzConfig.municipality.province}`, shortName: santaCruzConfig.municipality.province, province: santaCruzConfig.municipality.province,
@@ -127,113 +69,30 @@ async function main(): Promise<void> {
   const roleRows = await sql<{ id: string; key: string }[]>`SELECT id, key FROM platform.roles WHERE tenant_id = ${TENANT}`;
   const roleIdByKey = new Map(roleRows.map((r) => [r.key, r.id]));
 
-  // ── Staff users ─────────────────────────────────────────────────────────────
-  // Demo mode: every config.demoAccounts entry (shared demo password, is_demo).
-  // Bootstrap mode: ONE superadmin from env (its own password, NOT a demo account)
-  // and NO demo logins — for real production onboarding.
-  type SeedUser = DemoUser & { password: string; isDemo: boolean };
-  let seedUsers: SeedUser[];
-  if (env.seedMode === 'bootstrap') {
-    if (!env.superAdminEmail || !env.superAdminPassword) {
-      throw new Error('SEED_MODE=bootstrap requires SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD');
-    }
-    const admin = ROLES.find((r) => r.roleKey === 'lgu_admin')!;
-    seedUsers = [{
-      username: env.superAdminEmail, name: 'System Administrator', role: 'lgu_admin',
-      roleRef: admin.key, initials: 'AD', offices: admin.offices, memberships: admin.memberships,
-      title: admin.title, password: env.superAdminPassword, isDemo: false,
-    }];
-  } else {
-    seedUsers = USERS.map((u) => ({ ...u, password: PASSWORD, isDemo: true }));
+  // ── ONE superadmin from env (its own password, NOT a demo account) ───────────
+  if (!env.superAdminEmail || !env.superAdminPassword) {
+    throw new Error('Bootstrap seed requires SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD');
   }
-  for (const u of seedUsers) {
-    const id = uuidv7();
-    const roleId = roleIdByKey.get(u.roleRef) ?? null;
-    const passwordHash = await argonHash(u.password);
-    await db.insert(schema.users).values({
-      id, tenantId: TENANT, username: u.username, name: u.name, role: u.role,
-      title: u.title, offices: u.offices, initials: u.initials, passwordHash,
-      roleId, isDemo: u.isDemo,
-    }).onConflictDoNothing();
-    // Resolve the actual user id (insert may have conflicted on a prior run) and
-    // (re)link role + memberships idempotently.
-    const rows = await sql<{ id: string }[]>`SELECT id FROM platform.users WHERE tenant_id = ${TENANT} AND username = ${u.username} LIMIT 1`;
-    const uid = rows[0]?.id;
-    if (uid) {
-      await sql`UPDATE platform.users SET role_id = ${roleId}, is_demo = ${u.isDemo} WHERE id = ${uid}`;
-      for (const m of u.memberships) {
-        await db.insert(schema.memberships).values({ userId: uid, office: m.office, officeRole: m.officeRole }).onConflictDoNothing();
-      }
+  const admin = ROLES.find((r) => r.roleKey === 'lgu_admin')!;
+  const roleId = roleIdByKey.get(admin.key) ?? null;
+  const passwordHash = await argonHash(env.superAdminPassword);
+  await db.insert(schema.users).values({
+    id: uuidv7(), tenantId: TENANT, username: env.superAdminEmail, name: 'System Administrator',
+    role: 'lgu_admin', title: admin.title, offices: admin.offices, initials: 'AD',
+    passwordHash, roleId, isDemo: false,
+  }).onConflictDoNothing();
+  // Resolve the actual user id (insert may have conflicted on a prior run) and
+  // (re)link role + memberships idempotently.
+  const rows = await sql<{ id: string }[]>`SELECT id FROM platform.users WHERE tenant_id = ${TENANT} AND username = ${env.superAdminEmail} LIMIT 1`;
+  const uid = rows[0]?.id;
+  if (uid) {
+    await sql`UPDATE platform.users SET role_id = ${roleId}, is_demo = false WHERE id = ${uid}`;
+    for (const m of admin.memberships) {
+      await db.insert(schema.memberships).values({ userId: uid, office: m.office, officeRole: m.officeRole }).onConflictDoNothing();
     }
   }
 
-  // ── Per-LGU reference data (DEMO mode only) ─────────────────────────────────────
-  // Bootstrap mode stays a TRUE blank slate — tenant + roles + the ONE superadmin
-  // only. The LGU sets up its own roster, committees, zones, TODAs, fees and
-  // projects (in-app, or via its config + a re-seed). Nothing is pre-populated.
-  if (env.seedMode !== 'bootstrap') {
-    const members = santaCruzConfig.modules.sanggunian.members ?? [];
-    for (const m of members) await seedDoc(TENANT, 'sp.sanggunian.members', null, { ...m });
-
-    for (const c of santaCruzConfig.modules.sanggunian.committees ?? []) {
-      await seedDoc(TENANT, 'sp.sanggunian.bodies', null, { ...c });
-    }
-
-    const zones = santaCruzConfig.modules.mtop.zones ?? [];
-    for (const z of zones) {
-      const id = await seedDoc(TENANT, 'sp.mtop.zones', null, { ...z });
-      await db.insert(schema.zoneCounters).values({ tenantId: TENANT, zoneId: id, used: z.used }).onConflictDoNothing();
-    }
-
-    for (const t of santaCruzConfig.modules.mtop.todas ?? []) await seedDoc(TENANT, 'sp.mtop.todas', null, { ...t });
-
-    // Default MTOP document-requirement checklist — a platform-standard starting
-    // point the LGU then edits per-tenant in /setup → Documents. Matrix value:
-    // true = required, 'new' = required (labelled "for a new unit"), false = n/a.
-    const DOC_REQS: { id: string; name: string; sub: string; m: Record<string, boolean | 'new'> }[] = [
-      { id: 'form', name: 'Accomplished application form', sub: 'Signed Prangkisa intake form', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: true, CHANGE_MOTOR: true } },
-      { id: 'orcr', name: 'LTO OR / CR', sub: "In applicant's name", m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: 'new' } },
-      { id: 'brgy', name: 'Barangay Clearance / Certification', sub: 'From barangay of residence', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: false } },
-      { id: 'toda', name: 'TODA Certification / Endorsement', sub: 'From your association', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: false } },
-      { id: 'id', name: 'Valid government ID', sub: 'Any PhilSys / LTO / postal ID', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: true, CHANGE_MOTOR: true } },
-      { id: 'prevmtop', name: 'Previous MTOP', sub: 'Current franchise certificate', m: { NEW_MTOP: false, RENEWAL: true, DROPPING: true, CHANGE_MOTOR: true } },
-      { id: 'stencil', name: 'Stencil — motor & chassis number', sub: 'Engine and chassis rub', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: 'new' } },
-      { id: 'tpl', name: 'Insurance (TPL)', sub: 'Third-party liability', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: true } },
-      { id: 'nbi', name: 'Police / NBI clearance', sub: 'Confirm per local ordinance', m: { NEW_MTOP: true, RENEWAL: false, DROPPING: false, CHANGE_MOTOR: false } },
-      { id: 'cedula', name: 'Cedula / CTC', sub: 'Community tax certificate', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: true } },
-      { id: 'auto', name: 'Cert. from Certified Automotive', sub: 'Required for change of motor', m: { NEW_MTOP: false, RENEWAL: false, DROPPING: false, CHANGE_MOTOR: true } },
-    ];
-    for (const d of DOC_REQS) {
-      for (const [appType, v] of Object.entries(d.m)) {
-        if (!v) continue;
-        await seedDoc(TENANT, 'sp.mtop.requirements', null, { id: `${d.id}-${appType.toLowerCase()}`, name: d.name, sub: d.sub, appType, newUnit: v === 'new' });
-      }
-    }
-
-    const fees = santaCruzConfig.modules.treasury.fees ?? [];
-    for (const f of fees) await seedDoc(TENANT, 'sp.treasury.fees', null, { ...f });
-
-    const projects = santaCruzConfig.modules.portal.projects ?? [];
-    for (const p of projects) await seedDoc(TENANT, 'sp.portal.projects', null, { ...p });
-  }
-
-  // ── Demo legislative documents + sessions (DEMO mode only) ────────────────────
-  if (env.seedMode !== 'bootstrap') {
-    for (const d of santaCruzConfig.modules.sanggunian.sampleDocuments ?? []) {
-      const { wf, ...rest } = d;
-      await seedDoc(TENANT, 'sp.sanggunian.documents', d.ref, { ...rest, ...(wf ? { wf: wfAt(wf.def, wf.current) } : {}) });
-    }
-    for (const s of santaCruzConfig.modules.sanggunian.sampleSessions ?? []) {
-      await seedDoc(TENANT, 'sp.sanggunian.sessions', null, { ...s });
-    }
-  }
-
-  if (env.seedMode === 'bootstrap') {
-    console.log(`Bootstrap seed complete. Superadmin: ${env.superAdminEmail} (tenant ${TENANT}). No demo data.`);
-  } else {
-    const adminLogin = santaCruzConfig.demoAccounts?.find((a) => a.role === 'lgu_admin')?.email ?? 'admin';
-    console.log(`Seed complete. Demo login: ${adminLogin} / demo1234 (tenant ${TENANT}).`);
-  }
+  console.log(`Bootstrap seed complete. Superadmin: ${env.superAdminEmail} (tenant ${TENANT}). No demo data.`);
   await sql.end();
 }
 
