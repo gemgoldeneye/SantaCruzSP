@@ -1,4 +1,16 @@
 // Environment config — dev defaults point at deploy/dev/compose.yml ports (5500/6400).
+import { existsSync, readFileSync } from 'node:fs';
+
+// Local dev: load apps/api/.env if present (a REAL process env var still wins).
+// Zero-dep; production injects env via the deploy compose, not a committed file.
+if (existsSync('.env')) {
+  for (const line of readFileSync('.env', 'utf8').split('\n')) {
+    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
+    if (!m) continue;
+    const key = m[1] as string;
+    if (process.env[key] === undefined) process.env[key] = (m[2] ?? '').trim().replace(/^(["'])(.*)\1$/, '$2');
+  }
+}
 
 /** A peer node the sync pump federates with (Phase 7). */
 export interface PeerConfig { id: string; role: 'cloud' | 'onprem'; baseUrl: string; tenants: string[] }
