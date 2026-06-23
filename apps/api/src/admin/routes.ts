@@ -103,6 +103,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     const tenantId = req.tenantId!;
     const rows = await db.execute(rawSql`
       SELECT r.id, r.key, r.name, r.description, r.is_staff AS "isStaff", r.is_system AS "isSystem",
+             r.role_key AS "roleKey",
              r.permissions, (SELECT count(*)::int FROM platform.users u WHERE u.role_id = r.id) AS "userCount"
       FROM platform.roles r WHERE r.tenant_id = ${tenantId}
       ORDER BY r.is_system DESC, r.name ASC
