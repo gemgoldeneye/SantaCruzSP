@@ -7,6 +7,7 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { env } from './env.js';
 import { sql } from './db/client.js';
+import { reconcileSuperadmin } from './db/superadmin.js';
 import { redis } from './redis.js';
 import { authRoutes } from './auth/routes.js';
 import { citizenAuthRoutes } from './auth/citizen.js';
@@ -58,6 +59,10 @@ app.get('/healthz', async () => {
     redis: rd.status === 'fulfilled',
   };
 });
+
+// Single source of truth: reconcile the env-defined superadmin (apps/api/.env) on
+// every boot — idempotent. Change SUPERADMIN_EMAIL/PASSWORD + restart to take effect.
+await reconcileSuperadmin();
 
 await app.listen({ port: env.port, host: '0.0.0.0' });
 app.log.info(`sp-api (${env.nodeRole}) listening on :${env.port}`);
