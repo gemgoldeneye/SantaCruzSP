@@ -9,12 +9,17 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-import { FEES, PAY_METHODS, feeTotal, peso } from "./data";
+import { PAY_METHODS, peso } from "./data";
+import type { Fee } from "@/data";
+
+// Live fee total (Setup → Fees) for an application type — replaces hardcoded feeTotal.
+const liveTotal = (fees: Fee[], type: string): number =>
+  fees.filter((f) => f.appType === type).reduce((s, f) => s + f.amount, 0);
 import { QR } from "./qr";
 import { SectionLabel, ViewHeader } from "./shared";
 import type { Go, PayMethodId, RouteParams, Store } from "./types";
 
-export function Payment({ go, params, store }: { go: Go; params: RouteParams; store: Store }) {
+export function Payment({ go, params, store, fees }: { go: Go; params: RouteParams; store: Store; fees: Fee[] }) {
   const cfg = useSpConfig();
   const copy = useCopy();
   const app = params.ref ? store.getApp(params.ref) : undefined;
@@ -34,8 +39,8 @@ export function Payment({ go, params, store }: { go: Go; params: RouteParams; st
     );
   }
 
-  const fees = FEES[app.type] || [];
-  const total = feeTotal(app.type);
+  const lines = fees.filter((f) => f.appType === app.type);
+  const total = liveTotal(fees, app.type);
 
   const pay = () => {
     setPhase("processing");
@@ -212,10 +217,12 @@ export function Payment({ go, params, store }: { go: Go; params: RouteParams; st
           <div className="rounded-xl border bg-card p-5 shadow-sm">
             <SectionLabel>Order of payment · {app.ref}</SectionLabel>
             <div className="mt-3">
-              {fees.map((f) => (
-                <div key={f.k} className="flex items-center justify-between gap-3 py-1.5 text-sm">
-                  <span>{f.k}</span>
-                  <span className="font-medium tabular-nums">{peso(f.v)}</span>
+              {lines.length === 0 ? (
+                <p className="py-1.5 text-sm text-muted-foreground">No fee set for this type — add it in Setup → Fees.</p>
+              ) : lines.map((f) => (
+                <div key={f.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+                  <span>{f.label}</span>
+                  <span className="font-medium tabular-nums">{peso(f.amount)}</span>
                 </div>
               ))}
             </div>
