@@ -13,9 +13,12 @@ const PUBLIC_PATHS = ['/login', '/portal'];
 const isPublic = (pathname: string) =>
   PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
-/** Serwist PWA assets — never auth-gated (they carry no session). */
+/** Serwist PWA assets — never auth-gated (they carry no session). Includes the
+ *  self-hosted offline OCR engine assets (public/tesseract/), which the service
+ *  worker precaches and the scanner loads with no session cookie. */
 const isPwaAsset = (pathname: string) =>
-  pathname === '/sw.js' || pathname === '/manifest.webmanifest' || pathname.startsWith('/swe-worker-');
+  pathname === '/sw.js' || pathname === '/manifest.webmanifest' ||
+  pathname.startsWith('/swe-worker-') || pathname.startsWith('/tesseract/');
 
 /**
  * A self-destroying service worker. DEV ships no SW, so a stale one left by a
