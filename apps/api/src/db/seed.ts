@@ -134,14 +134,14 @@ async function main(): Promise<void> {
   type SeedUser = DemoUser & { password: string; isDemo: boolean };
   let seedUsers: SeedUser[];
   if (env.seedMode === 'bootstrap') {
-    if (!env.bootstrapAdminEmail || !env.bootstrapAdminPassword) {
-      throw new Error('SEED_MODE=bootstrap requires BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD');
+    if (!env.superAdminEmail || !env.superAdminPassword) {
+      throw new Error('SEED_MODE=bootstrap requires SUPERADMIN_EMAIL and SUPERADMIN_PASSWORD');
     }
     const admin = ROLES.find((r) => r.roleKey === 'lgu_admin')!;
     seedUsers = [{
-      username: env.bootstrapAdminEmail, name: 'System Administrator', role: 'lgu_admin',
+      username: env.superAdminEmail, name: 'System Administrator', role: 'lgu_admin',
       roleRef: admin.key, initials: 'AD', offices: admin.offices, memberships: admin.memberships,
-      title: admin.title, password: env.bootstrapAdminPassword, isDemo: false,
+      title: admin.title, password: env.superAdminPassword, isDemo: false,
     }];
   } else {
     seedUsers = USERS.map((u) => ({ ...u, password: PASSWORD, isDemo: true }));
@@ -229,7 +229,7 @@ async function main(): Promise<void> {
   }
 
   if (env.seedMode === 'bootstrap') {
-    console.log(`Bootstrap seed complete. Superadmin: ${env.bootstrapAdminEmail} (tenant ${TENANT}). No demo data.`);
+    console.log(`Bootstrap seed complete. Superadmin: ${env.superAdminEmail} (tenant ${TENANT}). No demo data.`);
   } else {
     const adminLogin = santaCruzConfig.demoAccounts?.find((a) => a.role === 'lgu_admin')?.email ?? 'admin';
     console.log(`Seed complete. Demo login: ${adminLogin} / demo1234 (tenant ${TENANT}).`);
