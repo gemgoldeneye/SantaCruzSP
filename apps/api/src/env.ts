@@ -30,10 +30,10 @@ export const env = {
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6400',
   sessionSecret: process.env.SESSION_SECRET ?? 'dev-only-secret-do-not-use-in-prod',
   // Seed mode: 'demo' = full demo data + logins; 'bootstrap' = ONE superadmin from
-  // BOOTSTRAP_ADMIN_* env, NO demo accounts/documents/sessions (production onboarding).
+  // SUPERADMIN_* env, NO demo accounts/documents/sessions (production onboarding).
   seedMode: (process.env.SEED_MODE ?? 'demo') as 'demo' | 'bootstrap',
-  bootstrapAdminEmail: process.env.BOOTSTRAP_ADMIN_EMAIL,
-  bootstrapAdminPassword: process.env.BOOTSTRAP_ADMIN_PASSWORD,
+  superAdminEmail: process.env.SUPERADMIN_EMAIL,
+  superAdminPassword: process.env.SUPERADMIN_PASSWORD,
   // The province hub and the Santa Cruz municipal node.
   provinceTenant: process.env.PROVINCE_TENANT ?? 'zambales-province',
   defaultTenant: process.env.DEFAULT_TENANT ?? 'santacruz-zambales',
