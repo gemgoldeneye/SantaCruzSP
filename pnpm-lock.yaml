@@ -20,8 +20,8 @@ importers:
         specifier: ^9.0.3
         version: 9.4.0
       '@gelabs/sp':
-        specifier: ^0.3.0
-        version: 0.3.0(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)
+        specifier: ^0.3.1
+        version: 0.3.1(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)
       '@lgu/santacruz':
         specifier: workspace:*
         version: link:../../config/santacruz
@@ -69,8 +69,8 @@ importers:
         specifier: ^1.5.0
         version: 1.6.0(@types/react@19.2.17)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@gelabs/sp':
-        specifier: ^0.3.0
-        version: 0.3.0(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)
+        specifier: ^0.3.1
+        version: 0.3.1(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)
       '@lgu/santacruz':
         specifier: workspace:*
         version: link:../../config/santacruz
@@ -956,6 +956,11 @@ packages:
 
   '@gelabs/sp@0.3.0':
     resolution: {integrity: sha512-0AY7u6egfDGKGyU2rRn3YktL8wM/VBUj5TmeKpS4f7k++plJfPen+OgT0za5DH2j8Nh1qNn/HsXyoqmG+222yA==}
+    peerDependencies:
+      react: '>=18'
+
+  '@gelabs/sp@0.3.1':
+    resolution: {integrity: sha512-pp5Cmt3Pi/79Ctdlz31rwlKHx6Y3sgndQubOcZnJG5a3whyDp+JcVXne88AUWFjgGnGsRWaV0ymxcpIim9sYyg==}
     peerDependencies:
       react: '>=18'
 
@@ -4115,6 +4120,44 @@ snapshots:
   '@floating-ui/utils@0.2.11': {}
 
   '@gelabs/sp@0.3.0(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)':
+    dependencies:
+      clsx: 2.1.1
+      dexie: 4.4.4
+      drizzle-orm: 0.38.4(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)
+      react: 19.2.4
+      tailwind-merge: 3.6.0
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@cloudflare/workers-types'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@neondatabase/serverless'
+      - '@op-engineering/op-sqlite'
+      - '@opentelemetry/api'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/react'
+      - '@types/sql.js'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - postgres
+      - prisma
+      - sql.js
+      - sqlite3
+
+  '@gelabs/sp@0.3.1(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)':
     dependencies:
       clsx: 2.1.1
       dexie: 4.4.4
