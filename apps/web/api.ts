@@ -42,6 +42,8 @@ export const api = {
   login: (username: string, password: string) =>
     req<MeResponse>('/auth/staff/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
   logout: () => req<{ ok: boolean }>('/auth/staff/logout', { method: 'POST' }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    req<{ ok: boolean }>('/auth/password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
   me: () => req<MeResponse>('/auth/me'),
   notifications: (limit = 40) => req<NotificationRow[]>(`/api/notifications?limit=${limit}`),
   analytics: () => req<AnalyticsResponse>('/api/reports/analytics'),

@@ -1,7 +1,7 @@
 // Staff auth routes: login / logout / me.
 import type { FastifyInstance } from 'fastify';
 import { and, eq } from 'drizzle-orm';
-import { verify as argonVerify } from '@node-rs/argon2';
+import { hash as argonHash, verify as argonVerify } from '@node-rs/argon2';
 import { z } from 'zod';
 import type { Bilingual, Membership, OfficeRoleKey, RoleKey, User } from '@gelabs/sp/contracts';
 import { db } from '../db/client.js';
@@ -19,6 +19,11 @@ const loginSchema = z.object({
   username: z.string().min(1).max(64),
   password: z.string().min(1).max(256),
   tenantId: z.string().min(1).max(64).optional(),
+});
+
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1).max(256),
+  newPassword: z.string().min(8).max(256),
 });
 
 function toUser(
@@ -82,6 +87,24 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/auth/me', { preHandler: requireUser }, async (req) => {
     return { user: req.user, tenantId: req.tenantId };
+  });
+
+  // Self-service change-password: any signed-in user rotates their OWN password
+  // (verify current, set new). Admin-initiated resets go through /api/admin/accounts.
+  app.post('/auth/password', { preHandler: requireUser }, async (req, reply) => {
+    const body = passwordSchema.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'validation_failed' });
+    const row = await db.query.users.findFirst({
+      where: and(eq(users.id, req.user!.id), eq(users.tenantId, req.tenantId!)),
+    });
+    if (!row) return reply.code(404).send({ error: 'not_found' });
+    const ok = await argonVerify(row.passwordHash, body.data.currentPassword).catch(() => false);
+    if (!ok) return reply.code(403).send({ error: 'wrong_password' });
+    await db.update(users)
+      .set({ passwordHash: await argonHash(body.data.newPassword) })
+      .where(and(eq(users.id, row.id), eq(users.tenantId, req.tenantId!)));
+    await auditInTenant({ tenantId: req.tenantId!, actorId: row.id, actorName: row.name, actorRole: row.role, action: 'auth.password_change' });
+    return reply.send({ ok: true });
   });
 }
 
