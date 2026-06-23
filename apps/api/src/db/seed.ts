@@ -167,27 +167,32 @@ async function main(): Promise<void> {
     }
   }
 
-  // ── Reference data ────────────────────────────────────────────────────────────
-  const members = santaCruzConfig.modules.sanggunian.members ?? [];
-  for (const m of members) await seedDoc(TENANT, 'sp.sanggunian.members', null, { ...m });
+  // ── Per-LGU reference data (DEMO mode only) ─────────────────────────────────────
+  // Bootstrap mode stays a TRUE blank slate — tenant + roles + the ONE superadmin
+  // only. The LGU sets up its own roster, committees, zones, TODAs, fees and
+  // projects (in-app, or via its config + a re-seed). Nothing is pre-populated.
+  if (env.seedMode !== 'bootstrap') {
+    const members = santaCruzConfig.modules.sanggunian.members ?? [];
+    for (const m of members) await seedDoc(TENANT, 'sp.sanggunian.members', null, { ...m });
 
-  for (const c of santaCruzConfig.modules.sanggunian.committees ?? []) {
-    await seedDoc(TENANT, 'sp.sanggunian.bodies', null, { ...c });
+    for (const c of santaCruzConfig.modules.sanggunian.committees ?? []) {
+      await seedDoc(TENANT, 'sp.sanggunian.bodies', null, { ...c });
+    }
+
+    const zones = santaCruzConfig.modules.mtop.zones ?? [];
+    for (const z of zones) {
+      const id = await seedDoc(TENANT, 'sp.mtop.zones', null, { ...z });
+      await db.insert(schema.zoneCounters).values({ tenantId: TENANT, zoneId: id, used: z.used }).onConflictDoNothing();
+    }
+
+    for (const t of santaCruzConfig.modules.mtop.todas ?? []) await seedDoc(TENANT, 'sp.mtop.todas', null, { ...t });
+
+    const fees = santaCruzConfig.modules.treasury.fees ?? [];
+    for (const f of fees) await seedDoc(TENANT, 'sp.treasury.fees', null, { ...f });
+
+    const projects = santaCruzConfig.modules.portal.projects ?? [];
+    for (const p of projects) await seedDoc(TENANT, 'sp.portal.projects', null, { ...p });
   }
-
-  const zones = santaCruzConfig.modules.mtop.zones ?? [];
-  for (const z of zones) {
-    const id = await seedDoc(TENANT, 'sp.mtop.zones', null, { ...z });
-    await db.insert(schema.zoneCounters).values({ tenantId: TENANT, zoneId: id, used: z.used }).onConflictDoNothing();
-  }
-
-  for (const t of santaCruzConfig.modules.mtop.todas ?? []) await seedDoc(TENANT, 'sp.mtop.todas', null, { ...t });
-
-  const fees = santaCruzConfig.modules.treasury.fees ?? [];
-  for (const f of fees) await seedDoc(TENANT, 'sp.treasury.fees', null, { ...f });
-
-  const projects = santaCruzConfig.modules.portal.projects ?? [];
-  for (const p of projects) await seedDoc(TENANT, 'sp.portal.projects', null, { ...p });
 
   // ── Demo legislative documents + sessions (DEMO mode only) ────────────────────
   if (env.seedMode !== 'bootstrap') {
