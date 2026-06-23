@@ -29,9 +29,7 @@ export const env = {
   ownerDatabaseUrl: process.env.OWNER_DATABASE_URL ?? 'postgres://zsp:zsp_dev@localhost:5500/sp',
   redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6400',
   sessionSecret: process.env.SESSION_SECRET ?? 'dev-only-secret-do-not-use-in-prod',
-  // Seed mode: 'demo' = full demo data + logins; 'bootstrap' = ONE superadmin from
-  // SUPERADMIN_* env, NO demo accounts/documents/sessions (production onboarding).
-  seedMode: (process.env.SEED_MODE ?? 'demo') as 'demo' | 'bootstrap',
+  // Bootstrap superadmin (created by `db:seed`): the LGU's first/only admin login.
   superAdminEmail: process.env.SUPERADMIN_EMAIL,
   superAdminPassword: process.env.SUPERADMIN_PASSWORD,
   // The province hub and the Santa Cruz municipal node.
