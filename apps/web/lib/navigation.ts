@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   ScrollText,
   Users,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 
@@ -91,6 +92,14 @@ export const NAV_ITEMS: NavItem[] = [
     description:
       "Important activity across the apps — new documents, sessions, franchise applications, MTOPs, and citizen feedback.",
     hidden: true,
+  },
+  {
+    title: "Setup",
+    label: "Setup",
+    href: "/setup",
+    icon: SlidersHorizontal,
+    description:
+      "Set up the Sangguniang Bayan roster, committees, and tricycle-franchising reference data (zones, TODAs, fees).",
   },
   {
     title: "Accounts",
