@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut, Search } from 'lucide-react';
+import { KeyRound, LogOut, Search } from 'lucide-react';
 import type { User } from '@gelabs/sp/contracts';
 import { SyncPill } from '@gelabs/sp/sync-client/ui';
 import { useSpConfig } from '@gelabs/sp/ui/client';
@@ -14,6 +14,7 @@ import {
   Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/auth';
+import { ChangePasswordDialog } from '@/components/change-password-dialog';
 
 export function AppTopbar({ user }: { user: User }) {
   const pathname = usePathname() ?? '/';
@@ -23,6 +24,7 @@ export function AppTopbar({ user }: { user: User }) {
   const roleName = user.title?.en || user.role;
 
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   const [pending, setPending] = useState(false);
 
   const signOut = async () => {
@@ -53,6 +55,14 @@ export function AppTopbar({ user }: { user: User }) {
         </div>
         <button
           type="button"
+          onClick={() => setPwOpen(true)}
+          title="Change password"
+          className="rounded-lg p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <KeyRound className="size-4" />
+        </button>
+        <button
+          type="button"
           onClick={() => setConfirmOpen(true)}
           title="Sign out"
           className="rounded-lg p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
@@ -78,6 +88,8 @@ export function AppTopbar({ user }: { user: User }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ChangePasswordDialog open={pwOpen} onOpenChange={setPwOpen} />
     </header>
   );
 }
