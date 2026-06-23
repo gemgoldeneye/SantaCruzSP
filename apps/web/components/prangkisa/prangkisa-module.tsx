@@ -13,7 +13,7 @@ import { useState } from "react";
 import { ApplyWizard } from "./apply";
 import { MtopView, Verify } from "./credential";
 import type { Zone } from "./data";
-import type { Toda, Fee } from "@/data";
+import type { Toda, Fee, AppDoc } from "@/data";
 import { Dashboard } from "./dashboard";
 import { AppDetail } from "./detail";
 import { Payment } from "./payment";
@@ -40,12 +40,14 @@ export function PrangkisaModule({
   zones,
   todas,
   fees,
+  appDocs,
 }: {
   initialApps: Application[];
   mtops: Mtop[];
   zones: Zone[];
   todas: Toda[];
   fees: Fee[];
+  appDocs: AppDoc[];
 }) {
   const [apps, setApps] = useState<Record<string, Application>>(() =>
     keyByRef(initialApps),
@@ -85,6 +87,7 @@ export function PrangkisaModule({
           zones={zones}
           todas={todas}
           fees={fees}
+          appDocs={appDocs}
         />
       );
       break;

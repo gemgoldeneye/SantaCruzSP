@@ -19,7 +19,7 @@
     "@fastify/cookie": "^11.0.1",
     "@fastify/cors": "^10.1.0",
     "@fastify/multipart": "^9.0.3",
-    "@gelabs/sp": "^0.2.0",
+    "@gelabs/sp": "^0.3.0",
     "@lgu/santacruz": "workspace:*",
     "@node-rs/argon2": "^2.0.2",
     "drizzle-orm": "^0.38.3",

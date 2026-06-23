@@ -4,10 +4,10 @@ import { useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { RefDataManager } from '@/components/setup/ref-data-manager';
 import { CommitteesManager } from '@/components/setup/committees-manager';
-import { members, zones, todas, fees } from '@/data';
+import { members, zones, todas, fees, appDocs } from '@/data';
 import { cn } from '@/lib/utils';
 
-const TABS = ['Roster', 'Committees', 'Zones', 'TODAs', 'Fees'] as const;
+const TABS = ['Roster', 'Committees', 'Zones', 'TODAs', 'Fees', 'Documents'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function SetupPage() {
@@ -116,6 +116,30 @@ export default function SetupPage() {
             <>
               <div className="font-medium">{f.label} <span className="text-muted-foreground">({f.appType})</span></div>
               <div className="truncate text-xs text-muted-foreground">PHP {f.amount.toLocaleString()}{f.confirmed ? '' : ' · draft'}</div>
+            </>
+          )}
+        />
+      )}
+
+      {tab === 'Documents' && (
+        <RefDataManager
+          collection={appDocs}
+          addLabel="Add requirement"
+          emptyText="No document requirements yet. Add the documents applicants must submit per franchise application type."
+          defaults={{ name: '', appType: 'NEW_MTOP', sub: '', newUnit: false }}
+          fields={[
+            { key: 'name', label: 'Document', type: 'text', required: true, placeholder: 'Barangay Clearance' },
+            { key: 'appType', label: 'Required for', type: 'select', options: [
+              { value: 'NEW_MTOP', label: 'New MTOP' }, { value: 'RENEWAL', label: 'Renewal' },
+              { value: 'CHANGE_MOTOR', label: 'Change of Motor' }, { value: 'DROPPING', label: 'Dropping' },
+            ] },
+            { key: 'sub', label: 'Note / where to get it', type: 'text', placeholder: "In applicant's name" },
+            { key: 'newUnit', label: 'Label as "for a new unit"', type: 'checkbox' },
+          ]}
+          renderRow={(d) => (
+            <>
+              <div className="font-medium">{d.name} <span className="text-muted-foreground">({d.appType})</span></div>
+              <div className="truncate text-xs text-muted-foreground">{d.sub}{d.newUnit ? ' · new unit' : ''}</div>
             </>
           )}
         />
