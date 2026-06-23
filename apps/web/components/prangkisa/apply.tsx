@@ -19,14 +19,17 @@ import { useSpConfig, useCopy } from "@gelabs/sp/ui/client";
 
 import {
   APP_TYPES,
-  FEES,
-  TODAS,
   docsFor,
-  feeTotal,
   peso,
   typeById,
 } from "./data";
 import type { Zone } from "./data";
+import type { Toda, Fee } from "@/data";
+
+// Sum the LIVE fee schedule (Setup → Fees) for an application type. The live model
+// is one consolidated amount per type, replacing the old hardcoded itemized breakdown.
+const liveTotal = (fees: Fee[], type: string): number =>
+  fees.filter((f) => f.appType === type).reduce((s, f) => s + f.amount, 0);
 import { CredentialCard, TYPE_ICON, ViewHeader, selectClass } from "./shared";
 import type { AppTypeId, Go, RouteParams, StageId, Store } from "./types";
 
@@ -84,11 +87,11 @@ function Stepper({ step }: { step: number }) {
   );
 }
 
-function LivePreview({ data }: { data: FormData }) {
+function LivePreview({ data, fees }: { data: FormData; fees: Fee[] }) {
   const cfg = useSpConfig();
   const copy = useCopy();
   const t = data.type ? typeById(data.type) : null;
-  const total = data.type ? feeTotal(data.type) : 0;
+  const total = data.type ? liveTotal(fees, data.type) : 0;
   return (
     <div className="space-y-3 lg:sticky lg:top-4">
       <CredentialCard
@@ -197,10 +200,12 @@ function StepDetails({
   data,
   set,
   zones,
+  todas,
 }: {
   data: FormData;
   set: (p: Partial<FormData>) => void;
   zones: Zone[];
+  todas: Toda[];
 }) {
   const cfg = useSpConfig();
   const linked = data.type === "RENEWAL" || data.type === "CHANGE_MOTOR" || data.type === "DROPPING";
@@ -260,9 +265,9 @@ function StepDetails({
           <LabelledField label="TODA" req>
             <select className={selectClass} value={data.toda} onChange={(e) => set({ toda: e.target.value })}>
               <option value="">Select TODA…</option>
-              {TODAS.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              {todas.map((t) => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
                 </option>
               ))}
             </select>
@@ -384,9 +389,9 @@ function ReviewRow({ k, v }: { k: string; v: React.ReactNode }) {
   );
 }
 
-function StepReview({ data }: { data: FormData }) {
+function StepReview({ data, fees }: { data: FormData; fees: Fee[] }) {
   const t = typeById(data.type as AppTypeId);
-  const fees = FEES[data.type as AppTypeId] || [];
+  const lines = fees.filter((f) => f.appType === data.type);
   const docs = docsFor(data.type as AppTypeId);
   const allUp = docs.every((d) => data.uploaded[d.id]);
   return (
@@ -429,20 +434,22 @@ function StepReview({ data }: { data: FormData }) {
         <div className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Order of payment (estimated)
         </div>
-        {fees.map((f) => (
-          <div key={f.k} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+        {lines.length === 0 ? (
+          <p className="py-1.5 text-sm text-muted-foreground">No fee set for this type yet — add it in Setup → Fees.</p>
+        ) : lines.map((f) => (
+          <div key={f.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
             <span className="flex items-center gap-2">
-              {f.k}
-              {f.confirm && <Badge variant="outline" className="text-amber-600">to confirm</Badge>}
+              {f.label}
+              {!f.confirmed && <Badge variant="outline" className="text-amber-600">to confirm</Badge>}
             </span>
-            <span className="font-medium tabular-nums">{peso(f.v)}</span>
+            <span className="font-medium tabular-nums">{peso(f.amount)}</span>
           </div>
         ))}
         <Separator className="my-3" />
         <div className="flex items-center justify-between">
           <span className="font-semibold">Total due on approval</span>
           <span className="font-heading text-xl font-bold text-primary tabular-nums">
-            {peso(feeTotal(data.type as AppTypeId))}
+            {peso(liveTotal(fees, data.type))}
           </span>
         </div>
       </div>
@@ -456,11 +463,15 @@ export function ApplyWizard({
   params,
   store,
   zones,
+  todas,
+  fees,
 }: {
   go: Go;
   params: RouteParams;
   store: Store;
   zones: Zone[];
+  todas: Toda[];
+  fees: Fee[];
 }) {
   const prefilled = useMemo<FormData>(() => {
     const seed: FormData = {
@@ -516,7 +527,7 @@ export function ApplyWizard({
       applicantAddress: data.address,
       stage,
       updated: "Just now",
-      amount: feeTotal(data.type as AppTypeId),
+      amount: liveTotal(fees, data.type),
       franchise: data.type === "NEW_MTOP" ? "— on award —" : data.franchise,
       documents: data.uploaded,
       timeline: {
@@ -543,9 +554,9 @@ export function ApplyWizard({
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr] lg:items-start">
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           {step === 0 && <StepType data={data} set={set} />}
-          {step === 1 && <StepDetails data={data} set={set} zones={zones} />}
+          {step === 1 && <StepDetails data={data} set={set} zones={zones} todas={todas} />}
           {step === 2 && <StepDocs data={data} set={set} />}
-          {step === 3 && <StepReview data={data} />}
+          {step === 3 && <StepReview data={data} fees={fees} />}
 
           <Separator className="my-5" />
           <div className="flex items-center justify-between">
@@ -563,7 +574,7 @@ export function ApplyWizard({
             )}
           </div>
         </div>
-        <LivePreview data={data} />
+        <LivePreview data={data} fees={fees} />
       </div>
     </div>
   );

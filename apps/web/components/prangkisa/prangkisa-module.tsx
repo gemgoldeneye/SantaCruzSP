@@ -13,6 +13,7 @@ import { useState } from "react";
 import { ApplyWizard } from "./apply";
 import { MtopView, Verify } from "./credential";
 import type { Zone } from "./data";
+import type { Toda, Fee } from "@/data";
 import { Dashboard } from "./dashboard";
 import { AppDetail } from "./detail";
 import { Payment } from "./payment";
@@ -37,10 +38,14 @@ export function PrangkisaModule({
   initialApps,
   mtops,
   zones,
+  todas,
+  fees,
 }: {
   initialApps: Application[];
   mtops: Mtop[];
   zones: Zone[];
+  todas: Toda[];
+  fees: Fee[];
 }) {
   const [apps, setApps] = useState<Record<string, Application>>(() =>
     keyByRef(initialApps),
@@ -78,6 +83,8 @@ export function PrangkisaModule({
           params={route.params}
           store={store}
           zones={zones}
+          todas={todas}
+          fees={fees}
         />
       );
       break;
@@ -85,7 +92,7 @@ export function PrangkisaModule({
       screen = <AppDetail go={go} params={route.params} store={store} />;
       break;
     case "payment":
-      screen = <Payment go={go} params={route.params} store={store} />;
+      screen = <Payment go={go} params={route.params} store={store} fees={fees} />;
       break;
     case "mtop":
       screen = (
