@@ -19,12 +19,11 @@ import { useSpConfig, useCopy } from "@gelabs/sp/ui/client";
 
 import {
   APP_TYPES,
-  docsFor,
   peso,
   typeById,
 } from "./data";
 import type { Zone } from "./data";
-import type { Toda, Fee } from "@/data";
+import type { Toda, Fee, AppDoc } from "@/data";
 
 // Sum the LIVE fee schedule (Setup → Fees) for an application type. The live model
 // is one consolidated amount per type, replacing the old hardcoded itemized breakdown.
@@ -285,10 +284,10 @@ function StepDetails({
 }
 
 /* ---------- STEP 3: documents ---------- */
-function StepDocs({ data, set }: { data: FormData; set: (p: Partial<FormData>) => void }) {
+function StepDocs({ data, set, appDocs }: { data: FormData; set: (p: Partial<FormData>) => void; appDocs: AppDoc[] }) {
   const cfg = useSpConfig();
   const copy = useCopy();
-  const docs = docsFor((data.type || "NEW_MTOP") as AppTypeId);
+  const docs = appDocs.filter((d) => d.appType === (data.type || "NEW_MTOP"));
   const uploaded = data.uploaded;
   const missing = docs.filter((d) => !uploaded[d.id]);
   const toggle = (id: string) => set({ uploaded: { ...uploaded, [id]: !uploaded[id] } });
@@ -389,10 +388,10 @@ function ReviewRow({ k, v }: { k: string; v: React.ReactNode }) {
   );
 }
 
-function StepReview({ data, fees }: { data: FormData; fees: Fee[] }) {
+function StepReview({ data, fees, appDocs }: { data: FormData; fees: Fee[]; appDocs: AppDoc[] }) {
   const t = typeById(data.type as AppTypeId);
   const lines = fees.filter((f) => f.appType === data.type);
-  const docs = docsFor(data.type as AppTypeId);
+  const docs = appDocs.filter((d) => d.appType === data.type);
   const allUp = docs.every((d) => data.uploaded[d.id]);
   return (
     <div className="space-y-4">
@@ -465,6 +464,7 @@ export function ApplyWizard({
   zones,
   todas,
   fees,
+  appDocs,
 }: {
   go: Go;
   params: RouteParams;
@@ -472,6 +472,7 @@ export function ApplyWizard({
   zones: Zone[];
   todas: Toda[];
   fees: Fee[];
+  appDocs: AppDoc[];
 }) {
   const prefilled = useMemo<FormData>(() => {
     const seed: FormData = {
@@ -508,7 +509,7 @@ export function ApplyWizard({
   const canNext = [
     !!data.type,
     !!(data.name && data.contact && data.address && data.zone && data.toda && (data.type === "DROPPING" || data.plate)),
-    docsFor((data.type || "NEW_MTOP") as AppTypeId).every((d) => data.uploaded[d.id]),
+    appDocs.filter((d) => d.appType === (data.type || "NEW_MTOP")).every((d) => data.uploaded[d.id]),
     true,
   ][step];
 
@@ -555,8 +556,8 @@ export function ApplyWizard({
         <div className="rounded-xl border bg-card p-5 shadow-sm">
           {step === 0 && <StepType data={data} set={set} />}
           {step === 1 && <StepDetails data={data} set={set} zones={zones} todas={todas} />}
-          {step === 2 && <StepDocs data={data} set={set} />}
-          {step === 3 && <StepReview data={data} fees={fees} />}
+          {step === 2 && <StepDocs data={data} set={set} appDocs={appDocs} />}
+          {step === 3 && <StepReview data={data} fees={fees} appDocs={appDocs} />}
 
           <Separator className="my-5" />
           <div className="flex items-center justify-between">

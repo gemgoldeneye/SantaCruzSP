@@ -12,7 +12,7 @@ does not contain it. Per-LGU values live ONLY in `config/santacruz`; everything 
   (document store + offline sync + workflow + multi-tenant RLS + federation node pump).
 - `config/santacruz` — `@lgu/santacruz`: one `defineSpConfig()` — the ONLY place Santa Cruz values live.
 - `@gelabs/sp` — the SDK umbrella (subpaths: `runtime`/`data`/`contracts`/`modules`/`sync-client`
-  [`/ui`]/`ui`[`/client`]/`config`). Consumed from npm as the published private `@gelabs/sp@^0.2.0`.
+  [`/ui`]/`ui`[`/client`]/`config`). Consumed from npm as the published private `@gelabs/sp@^0.3.0`.
 - `deploy/{cloud,onprem,dev}` — federation (province HUB ↔ Santa Cruz NODE over Tailscale). `legacy/web` — archived.
 
 ## Conventions

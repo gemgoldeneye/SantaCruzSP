@@ -187,6 +187,29 @@ async function main(): Promise<void> {
 
     for (const t of santaCruzConfig.modules.mtop.todas ?? []) await seedDoc(TENANT, 'sp.mtop.todas', null, { ...t });
 
+    // Default MTOP document-requirement checklist — a platform-standard starting
+    // point the LGU then edits per-tenant in /setup → Documents. Matrix value:
+    // true = required, 'new' = required (labelled "for a new unit"), false = n/a.
+    const DOC_REQS: { id: string; name: string; sub: string; m: Record<string, boolean | 'new'> }[] = [
+      { id: 'form', name: 'Accomplished application form', sub: 'Signed Prangkisa intake form', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: true, CHANGE_MOTOR: true } },
+      { id: 'orcr', name: 'LTO OR / CR', sub: "In applicant's name", m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: 'new' } },
+      { id: 'brgy', name: 'Barangay Clearance / Certification', sub: 'From barangay of residence', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: false } },
+      { id: 'toda', name: 'TODA Certification / Endorsement', sub: 'From your association', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: false } },
+      { id: 'id', name: 'Valid government ID', sub: 'Any PhilSys / LTO / postal ID', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: true, CHANGE_MOTOR: true } },
+      { id: 'prevmtop', name: 'Previous MTOP', sub: 'Current franchise certificate', m: { NEW_MTOP: false, RENEWAL: true, DROPPING: true, CHANGE_MOTOR: true } },
+      { id: 'stencil', name: 'Stencil — motor & chassis number', sub: 'Engine and chassis rub', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: 'new' } },
+      { id: 'tpl', name: 'Insurance (TPL)', sub: 'Third-party liability', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: true } },
+      { id: 'nbi', name: 'Police / NBI clearance', sub: 'Confirm per local ordinance', m: { NEW_MTOP: true, RENEWAL: false, DROPPING: false, CHANGE_MOTOR: false } },
+      { id: 'cedula', name: 'Cedula / CTC', sub: 'Community tax certificate', m: { NEW_MTOP: true, RENEWAL: true, DROPPING: false, CHANGE_MOTOR: true } },
+      { id: 'auto', name: 'Cert. from Certified Automotive', sub: 'Required for change of motor', m: { NEW_MTOP: false, RENEWAL: false, DROPPING: false, CHANGE_MOTOR: true } },
+    ];
+    for (const d of DOC_REQS) {
+      for (const [appType, v] of Object.entries(d.m)) {
+        if (!v) continue;
+        await seedDoc(TENANT, 'sp.mtop.requirements', null, { id: `${d.id}-${appType.toLowerCase()}`, name: d.name, sub: d.sub, appType, newUnit: v === 'new' });
+      }
+    }
+
     const fees = santaCruzConfig.modules.treasury.fees ?? [];
     for (const f of fees) await seedDoc(TENANT, 'sp.treasury.fees', null, { ...f });
 

@@ -20,8 +20,8 @@ importers:
         specifier: ^9.0.3
         version: 9.4.0
       '@gelabs/sp':
-        specifier: ^0.2.0
-        version: 0.2.0(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)
+        specifier: ^0.3.0
+        version: 0.3.0(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)
       '@lgu/santacruz':
         specifier: workspace:*
         version: link:../../config/santacruz
@@ -69,8 +69,8 @@ importers:
         specifier: ^1.5.0
         version: 1.6.0(@types/react@19.2.17)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@gelabs/sp':
-        specifier: ^0.2.0
-        version: 0.2.0(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)
+        specifier: ^0.3.0
+        version: 0.3.0(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)
       '@lgu/santacruz':
         specifier: workspace:*
         version: link:../../config/santacruz
@@ -142,8 +142,8 @@ importers:
   config/santacruz:
     dependencies:
       '@gelabs/sp':
-        specifier: ^0.2.0
-        version: 0.2.0(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)
+        specifier: ^0.3.0
+        version: 0.3.0(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)
     devDependencies:
       typescript:
         specifier: ^5.6.3
@@ -954,8 +954,8 @@ packages:
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
 
-  '@gelabs/sp@0.2.0':
-    resolution: {integrity: sha512-HSf6e1yJZCzd17hjsInHCeC6Ic7NM7RI1dawjYVBHO1ZiR27zbCE25WXj17dDDaj3Bw5YMtXS4WsmrEtrpSTcg==}
+  '@gelabs/sp@0.3.0':
+    resolution: {integrity: sha512-0AY7u6egfDGKGyU2rRn3YktL8wM/VBUj5TmeKpS4f7k++plJfPen+OgT0za5DH2j8Nh1qNn/HsXyoqmG+222yA==}
     peerDependencies:
       react: '>=18'
 
@@ -4114,7 +4114,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@gelabs/sp@0.2.0(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)':
+  '@gelabs/sp@0.3.0(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.4)':
     dependencies:
       clsx: 2.1.1
       dexie: 4.4.4

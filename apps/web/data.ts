@@ -56,6 +56,7 @@ export interface Mtop extends Identified {
 export interface Zone extends Identified { name: string; kind: 'Poblacion' | 'Rural'; cap: number; used: number; frozen: boolean }
 export interface Toda extends Identified { name: string }
 export interface Fee extends Identified { appType: string; label: string; amount: number; confirmed: boolean; sortOrder: number }
+export interface AppDoc extends Identified { name: string; sub?: string; appType: string; newUnit: boolean }
 export interface Project extends Identified { name: string; municipality: string; status: 'Ongoing' | 'Planned' | 'Completed'; budget: number; sortOrder: number }
 
 export const documents = createCollection<SpDocument>('sanggunian.documents', [], 1);
@@ -67,6 +68,7 @@ export const mtops = createCollection<Mtop>('mtop.mtops', [], 1);
 export const zones = createCollection<Zone>('mtop.zones', [], 1);
 export const todas = createCollection<Toda>('mtop.todas', [], 1);
 export const fees = createCollection<Fee>('treasury.fees', [], 1);
+export const appDocs = createCollection<AppDoc>('mtop.requirements', [], 1);
 export const projects = createCollection<Project>('portal.projects', [], 1);
 
 // Citizen-writable: portal feedback (offline-durable, attributed to the signed-in citizen).
