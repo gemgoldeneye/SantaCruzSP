@@ -1,0 +1,84 @@
+# SantaCruzSP — STAGING stack (Docker Swarm, shared-edge VPS).
+#
+# Two services: `api` (Fastify, talks to managed Postgres + Redis) and `web`
+# (Next.js standalone, frontend-only — it proxies /api,/auth,/healthz to the api
+# over the shared edge). The SHARED edge (deploy/edge/) owns :80/:443 and reaches
+# this stack on the external `zambal-edge` network via the per-LGU aliases below
+# (stcz-sp-web / stcz-sp-api) so SP LGUs don't collide on the shared network.
+#
+#   export TAG=<git-sha>
+#   docker stack deploy -c deploy/staging/compose.yml stcz-sp-staging
+#
+version: "3.9"
+# NB: no top-level `name:` — `docker stack deploy` uses the legacy v3 schema
+# which rejects it. The stack name comes from the deploy command above.
+
+services:
+  api:
+    build: { context: ../.., dockerfile: apps/api/Dockerfile }
+    image: stcz-sp-api:${TAG:-latest}
+    environment:
+      NODE_ENV: production
+      NODE_ROLE: cloud
+      PORT: "8787"
+      DATABASE_URL: ${SP_DATABASE_URL}
+      OWNER_DATABASE_URL: ${SP_OWNER_DATABASE_URL}
+      REDIS_URL: ${SP_REDIS_URL}
+      SESSION_SECRET: ${SP_SESSION_SECRET}
+      CORS_ORIGINS: ${SP_CORS_ORIGINS}
+      PROVINCE_TENANT: zambales-province
+      DEFAULT_TENANT: santacruz-zambales
+      PAYMENT_WEBHOOK_SECRET: ${SP_PAYMENT_WEBHOOK_SECRET:-}
+    networks:
+      edge: {}
+      # Per-LGU alias so the web (and other LGUs' stacks) reach this unambiguously.
+      zambal-edge: { aliases: [stcz-sp-api] }
+    # Reach host-installed Redis (redis://host.docker.internal:6379) if used.
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      replicas: ${API_REPLICAS:-1}
+      restart_policy: { condition: any }
+      update_config: { order: start-first, parallelism: 1, delay: 8s, failure_action: rollback }
+      rollback_config: { order: stop-first, parallelism: 1 }
+
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      # The Next server proxies /api,/auth,/healthz to the api over the edge.
+      args: { NEXT_PUBLIC_API_BASE: "http://stcz-sp-api:8787" }
+    image: stcz-sp-web:${TAG:-latest}
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      HOSTNAME: 0.0.0.0
+      NEXT_PUBLIC_API_BASE: "http://stcz-sp-api:8787"
+    networks:
+      edge: {}
+      # Public host (sp-stacruz-staging.${DOMAIN}) routes here via the shared edge.
+      zambal-edge: { aliases: [stcz-sp-web] }
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    deploy:
+      replicas: ${WEB_REPLICAS:-1}
+      restart_policy: { condition: any }
+      update_config: { order: start-first, parallelism: 1, delay: 5s, failure_action: rollback }
+      rollback_config: { order: stop-first, parallelism: 1 }
+
+networks:
+  edge:
+    driver: overlay
+    attachable: true
+  zambal-edge:
+    external: true
