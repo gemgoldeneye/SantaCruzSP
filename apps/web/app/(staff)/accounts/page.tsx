@@ -15,7 +15,7 @@ export default function AccountsPage() {
         const [accRes, roleRes] = await Promise.all([adminFetch('/api/admin/accounts'), adminFetch('/api/admin/roles')]);
         if (!accRes.ok) throw new Error('Restricted');
         const accounts = (await accRes.json()) as AccountRow[];
-        const roles = roleRes.ok ? ((await roleRes.json()) as { id: string; name: string }[]).map((r) => ({ id: r.id, name: r.name })) : [];
+        const roles = roleRes.ok ? ((await roleRes.json()) as { id: string; name: string; roleKey: string }[]).map((r) => ({ id: r.id, name: r.name, roleKey: r.roleKey })) : [];
         setData({ accounts, roles });
       } catch (e) {
         setError(String((e as Error).message ?? e));

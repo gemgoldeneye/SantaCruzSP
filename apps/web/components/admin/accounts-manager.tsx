@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Pencil, Plus, Trash2, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { adminFetch } from "@/api";
+import { members, type BoardMember } from "@/data";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ export interface AccountRow {
 export interface RoleOption {
   id: string;
   name: string;
+  roleKey: string;
 }
 
 interface FormState {
@@ -48,7 +50,11 @@ interface FormState {
   email: string;
   password: string;
   roleId: string;
+  district: string;
 }
+
+// A Sanggunian board member IS an account whose role is legislative.
+const LEGISLATIVE_ROLE_KEYS = ["presiding_officer", "member"];
 
 const selectClass =
   "h-9 w-full rounded-lg border border-input bg-transparent px-3 pr-8 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50";
@@ -69,9 +75,19 @@ export function AccountsManager({
     email: "",
     password: "",
     roleId: "",
+    district: "",
   });
   const [pending, setPending] = useState(false);
   const [toDelete, setToDelete] = useState<AccountRow | null>(null);
+
+  // The synced council roster — mirrors legislative accounts (keyed by user id) so
+  // committees / authorship / dashboard resolve members without a separate Roster.
+  const memberList = members.useItems();
+  const roleOf = (roleId: string) => roles.find((r) => r.id === roleId);
+  const isLegislative = (roleId: string) => {
+    const r = roleOf(roleId);
+    return !!r && LEGISLATIVE_ROLE_KEYS.includes(r.roleKey);
+  };
 
   const load = async () => {
     const [accRes, roleRes] = await Promise.all([
@@ -81,17 +97,20 @@ export function AccountsManager({
     if (accRes.ok) setAccounts(await accRes.json());
     if (roleRes.ok) {
       const data = (await roleRes.json()) as RoleOption[];
-      setRoles(data.map((r) => ({ id: r.id, name: r.name })));
+      setRoles(data.map((r) => ({ id: r.id, name: r.name, roleKey: r.roleKey })));
     }
   };
 
   const openCreate = () => {
-    setForm({ name: "", email: "", password: "", roleId: roles[0]?.id ?? "" });
+    setForm({ name: "", email: "", password: "", roleId: roles[0]?.id ?? "", district: "" });
     setCreating(true);
   };
 
   const openEdit = (acc: AccountRow) => {
-    setForm({ name: acc.name, email: acc.email, password: "", roleId: acc.roleId });
+    setForm({
+      name: acc.name, email: acc.email, password: "", roleId: acc.roleId,
+      district: memberList.find((m) => m.id === acc.id)?.district ?? "",
+    });
     setEditing(acc);
   };
 
@@ -125,6 +144,21 @@ export function AccountsManager({
         toast.error(data.error ?? "Could not save the account.");
         return;
       }
+      // Mirror this account into the synced council roster: upsert if its role is
+      // legislative (presiding_officer / member), else drop any stale roster entry.
+      const userId = creating
+        ? ((await res.json().catch(() => ({}))) as { id?: string }).id
+        : editing!.id;
+      if (userId) {
+        const role = roleOf(form.roleId);
+        if (role && LEGISLATIVE_ROLE_KEYS.includes(role.roleKey)) {
+          const entry: BoardMember = { id: userId, name: form.name, district: form.district, role: role.name };
+          if (memberList.some((m) => m.id === userId)) members.update(userId, { name: entry.name, district: entry.district, role: entry.role });
+          else members.add(entry);
+        } else if (memberList.some((m) => m.id === userId)) {
+          members.remove(userId);
+        }
+      }
       toast.success(creating ? "Account created." : "Account updated.");
       closeForm();
       await load();
@@ -148,6 +182,7 @@ export function AccountsManager({
         return;
       }
       toast.success("Account deleted.");
+      if (memberList.some((m) => m.id === toDelete.id)) members.remove(toDelete.id);
       setToDelete(null);
       await load();
     } catch {
@@ -298,6 +333,20 @@ export function AccountsManager({
                 ))}
               </select>
             </div>
+            {isLegislative(form.roleId) && (
+              <div className="space-y-1.5">
+                <Label htmlFor="acc-district">Position / Designation</Label>
+                <Input
+                  id="acc-district"
+                  value={form.district}
+                  placeholder="e.g. Majority Floor Leader · District 1 · At-large"
+                  onChange={(e) => setForm((f) => ({ ...f, district: e.target.value }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  This account is a Sanggunian member — shown in the council roster &amp; committees.
+                </p>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label htmlFor="acc-password">
                 {creating ? "Password" : "New password"}

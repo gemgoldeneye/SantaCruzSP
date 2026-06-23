@@ -4,20 +4,20 @@ import { useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { RefDataManager } from '@/components/setup/ref-data-manager';
 import { CommitteesManager } from '@/components/setup/committees-manager';
-import { members, zones, todas, fees, appDocs } from '@/data';
+import { zones, todas, fees, appDocs } from '@/data';
 import { cn } from '@/lib/utils';
 
-const TABS = ['Roster', 'Committees', 'Zones', 'TODAs', 'Fees', 'Documents'] as const;
+const TABS = ['Committees', 'Zones', 'TODAs', 'Fees', 'Documents'] as const;
 type Tab = (typeof TABS)[number];
 
 export default function SetupPage() {
-  const [tab, setTab] = useState<Tab>('Roster');
+  const [tab, setTab] = useState<Tab>('Committees');
 
   return (
     <>
       <PageHeader
         title="Setup"
-        description="Set up your Sangguniang Bayan roster, committees, and tricycle-franchising reference data. Everything here is created and maintained by your office."
+        description="Set up your committees and tricycle-franchising reference data. (Your Sangguniang Bayan roster lives in Accounts — add an account with the Presiding Officer or Member role.) Everything here is created and maintained by your office."
       />
 
       <div className="mb-4 flex flex-wrap gap-1 border-b">
@@ -35,29 +35,6 @@ export default function SetupPage() {
           </button>
         ))}
       </div>
-
-      {tab === 'Roster' && (
-        <RefDataManager
-          collection={members}
-          addLabel="Add member"
-          emptyText="No SB members yet. Add your Sangguniang Bayan roster."
-          defaults={{ name: '', district: '', role: 'Member' }}
-          fields={[
-            { key: 'name', label: 'Name', type: 'text', required: true, placeholder: 'Hon. Juan dela Cruz' },
-            { key: 'district', label: 'District / designation', type: 'text', placeholder: 'District 1 / At-large' },
-            { key: 'role', label: 'Role', type: 'select', required: true, options: [
-              { value: 'Presiding Officer', label: 'Presiding Officer' },
-              { value: 'Member', label: 'Member' },
-            ] },
-          ]}
-          renderRow={(m) => (
-            <>
-              <div className="font-medium">{m.name}</div>
-              <div className="truncate text-xs text-muted-foreground">{m.role}{m.district ? ` · ${m.district}` : ''}</div>
-            </>
-          )}
-        />
-      )}
 
       {tab === 'Committees' && <CommitteesManager />}
 
