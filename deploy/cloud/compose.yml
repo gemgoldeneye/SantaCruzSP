@@ -1,0 +1,45 @@
+# CLOUD HUB — the Zambales provincial node. Aggregates up_projection deltas from
+# each LGU on-prem node (Santa Cruz, …) and serves province-published config back down.
+# Citizen OTP accounts live here (cloud_only). NOT a turnkey file — fill secrets.
+name: sp-cloud
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zsp
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?set PG_PASSWORD}
+      POSTGRES_DB: sp
+    volumes:
+      - sp_cloud_pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      secrets:
+        - npm_token
+    environment:
+      NODE_ENV: production
+      NODE_ROLE: cloud
+      NODE_ID: cloud-hub
+      NODE_TOKEN: ${NODE_TOKEN:?shared peer secret}
+      DATABASE_URL: postgres://zsp_app:${PG_APP_PASSWORD:?}@postgres:5432/sp
+      OWNER_DATABASE_URL: postgres://zsp:${PG_PASSWORD:?}@postgres:5432/sp
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:?}
+      PROVINCE_TENANT: zambales-province
+    depends_on: [postgres, redis]
+
+# @gelabs/sp is a private npm package — `docker compose build` reads the read token
+# from the NPM_TOKEN env var and passes it to the api Dockerfile as a BuildKit secret.
+secrets:
+  npm_token:
+    environment: NPM_TOKEN
+
+volumes:
+  sp_cloud_pgdata:

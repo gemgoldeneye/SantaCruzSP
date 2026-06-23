@@ -1,24 +1,29 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
-/.pnp
+# dependencies (hoisted at root + per-package)
+node_modules/
+.pnp
 .pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+.pnpm-store/
+
+# build output
+dist/
+dev-dist/
+build/
+out/
+.next/
+*.tsbuildinfo
+
+# Serwist PWA service worker (emitted by `next build`)
+apps/web/public/sw.js
+apps/web/public/sw.js.map
+apps/web/public/swe-worker-*.js
 
 # testing
-/coverage
+coverage/
 
-# next.js
-/.next/
-/out/
-
-# production
-/build
+# drizzle (generated migration journal is committed; transient meta is not)
+**/drizzle/meta/_journal.json.bak
 
 # misc
 .DS_Store
@@ -32,13 +37,13 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
 
 # typescript
-*.tsbuildinfo
 next-env.d.ts
 
-# local Claude Code settings
-.claude/
+# legacy Next.js app generated Prisma client
+legacy/web/src/generated/prisma

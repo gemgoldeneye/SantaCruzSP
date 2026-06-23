@@ -1,0 +1,60 @@
+# ON-PREM Santa Cruz LGU node — runs inside the municipal hall, federated to the Zambales
+# provincial cloud hub over Tailscale (no inbound WAN ports). Resident PII / payments
+# live ONLY here; only sync-class up_projection deltas flow up to the hub.
+#
+# NOT a turnkey file — fill the secrets and the Tailscale auth key before use.
+name: sp-onprem
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zsp
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?set PG_PASSWORD}
+      POSTGRES_DB: sp
+    volumes:
+      - sp_onprem_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zsp -d sp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+      secrets:
+        - npm_token
+    environment:
+      NODE_ENV: production
+      NODE_ROLE: onprem
+      NODE_ID: onprem-santacruz
+      NODE_TOKEN: ${NODE_TOKEN:?shared peer secret}
+      # Pull province-published config DOWN; push issued MTOPs / enacted ordinances UP.
+      PEERS: '[{"id":"cloud-hub","role":"cloud","baseUrl":"http://cloud-hub:8787","tenants":["santacruz-zambales"]}]'
+      DATABASE_URL: postgres://zsp_app:${PG_APP_PASSWORD:?}@postgres:5432/sp
+      OWNER_DATABASE_URL: postgres://zsp:${PG_PASSWORD:?}@postgres:5432/sp
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:?}
+      DEFAULT_TENANT: santacruz-zambales
+      PROVINCE_TENANT: zambales-province
+    depends_on: [postgres, redis]
+
+  # tailscale sidecar (auth key scoped to the "sp-nodes" tailnet, ACL → hub:8787 only)
+  # tailscale:
+  #   image: tailscale/tailscale:latest
+  #   environment: { TS_AUTHKEY: ${TS_AUTHKEY:?} }
+
+# @gelabs/sp is a private npm package — `docker compose build` reads the read token
+# from the NPM_TOKEN env var and passes it to the api Dockerfile as a BuildKit secret.
+secrets:
+  npm_token:
+    environment: NPM_TOKEN
+
+volumes:
+  sp_onprem_pgdata:

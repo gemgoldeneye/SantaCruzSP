@@ -1,0 +1,43 @@
+# DEVELOPMENT ONLY — local Postgres 16 + Redis 7 for the Santa Cruz Sanggunian platform.
+# Usage: pnpm db:up / pnpm db:down (from repo root).
+# Production uses MANAGED Postgres + Redis (cloud) and a federated on-prem node;
+# see deploy/cloud and deploy/onprem. NEVER expose this dev stack publicly.
+name: sp-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sp-dev-pg
+    environment:
+      # Bootstrap superuser == the migration "owner" role (zsp). The runtime
+      # "app" role (zsp_app, RLS applies) is created by the first migration.
+      POSTGRES_USER: zsp
+      POSTGRES_PASSWORD: zsp_dev
+      POSTGRES_DB: sp
+    ports:
+      # Host port 5500 to avoid clashing with the legacy app (5433) and tanglaw (5499).
+      - "5500:5432"
+    volumes:
+      - sp_dev_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zsp -d sp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: sp-dev-redis
+    ports:
+      # Host port 6400 to avoid clashing with the legacy app (6380) and tanglaw (6399).
+      - "6400:6379"
+    # No persistence by design — Redis is disposable (sessions/jobs only).
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  sp_dev_pgdata:

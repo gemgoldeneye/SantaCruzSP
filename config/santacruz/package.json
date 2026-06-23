@@ -1,0 +1,21 @@
+{
+  "name": "@lgu/santacruz",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Per-LGU deployment config for the Municipality of Santa Cruz, Zambales (consumes @gelabs/sp). To stand up another municipality, copy this package and change the values.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@gelabs/sp": "^0.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
