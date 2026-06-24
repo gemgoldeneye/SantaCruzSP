@@ -22,6 +22,7 @@ import { verifyRoutes } from './verify/routes.js';
 import { publicRoutes } from './public/routes.js';
 import { nodeRoutes } from './node/routes.js';
 import { metaRoutes } from './meta/routes.js';
+import { manifestRoutes } from './manifest/routes.js';
 
 // Boot the SP runtime: registers the standard domain modules + loads the per-LGU
 // config (Santa Cruz). Must precede any request handling.
@@ -47,6 +48,7 @@ await app.register(verifyRoutes);
 await app.register(publicRoutes);
 await app.register(nodeRoutes);
 await app.register(metaRoutes);
+await app.register(manifestRoutes);
 
 // Heartbeat target for the sync-client connectivity detector. Must stay cheap.
 app.get('/healthz', async () => {
