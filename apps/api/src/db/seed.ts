@@ -82,11 +82,12 @@ async function main(): Promise<void> {
     passwordHash, roleId, isDemo: false,
   }).onConflictDoNothing();
   // Resolve the actual user id (insert may have conflicted on a prior run) and
-  // (re)link role + memberships idempotently.
+  // (re)link role + memberships + RE-APPLY the superadmin password idempotently,
+  // so rotating SUPERADMIN_PASSWORD in Jenkins takes effect on the next deploy.
   const rows = await sql<{ id: string }[]>`SELECT id FROM platform.users WHERE tenant_id = ${TENANT} AND username = ${env.superAdminEmail} LIMIT 1`;
   const uid = rows[0]?.id;
   if (uid) {
-    await sql`UPDATE platform.users SET role_id = ${roleId}, is_demo = false WHERE id = ${uid}`;
+    await sql`UPDATE platform.users SET role_id = ${roleId}, is_demo = false, password_hash = ${passwordHash} WHERE id = ${uid}`;
     for (const m of admin.memberships) {
       await db.insert(schema.memberships).values({ userId: uid, office: m.office, officeRole: m.officeRole }).onConflictDoNothing();
     }
