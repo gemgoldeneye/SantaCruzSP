@@ -98,7 +98,12 @@ seed_once() {
     sh -c 'psql "$PGURL" -c "'"$q_mark"'"' >/dev/null
   echo "==> recorded seed marker '$marker'"
 }
-seed_once "initial" docker run --rm \
+# Seed/refresh on EVERY deploy. The bootstrap seed is idempotent (data uses
+# ON CONFLICT DO NOTHING; built-in roles are delete-protected) and RE-APPLIES the
+# superadmin password from the current SUPERADMIN_* creds — so rotating the Jenkins
+# credential takes effect here. (Was marker-gated via seed_once -> skipped on
+# re-deploy, which left the first-seeded superadmin password stuck.)
+docker run --rm \
   -e OWNER_DATABASE_URL="$SP_OWNER_DATABASE_URL" \
   -e DATABASE_URL="$SP_DATABASE_URL" \
   -e SUPERADMIN_EMAIL="$SUPERADMIN_EMAIL" \
