@@ -12,17 +12,7 @@ if (existsSync('.env')) {
   }
 }
 
-/** A peer node the sync pump federates with (Phase 7). */
-export interface PeerConfig { id: string; role: 'cloud' | 'onprem'; baseUrl: string; tenants: string[] }
-function parsePeers(): PeerConfig[] {
-  try { return JSON.parse(process.env.PEERS ?? '[]') as PeerConfig[]; } catch { return []; }
-}
-
 export const env = {
-  nodeRole: (process.env.NODE_ROLE ?? 'cloud') as 'cloud' | 'onprem',
-  nodeId: process.env.NODE_ID ?? 'cloud-hub',
-  nodeToken: process.env.NODE_TOKEN ?? 'dev-node-token-shared-between-peers',
-  peers: parsePeers(),
   port: Number(process.env.PORT ?? 8787),
   // Runtime connects as the NON-OWNER role so RLS applies. Migrations/admin use the owner URL.
   databaseUrl: process.env.DATABASE_URL ?? 'postgres://zsp_app:zsp_app_dev@localhost:5500/sp',
@@ -32,8 +22,7 @@ export const env = {
   // Bootstrap superadmin (created by `db:seed`): the LGU's first/only admin login.
   superAdminEmail: process.env.SUPERADMIN_EMAIL,
   superAdminPassword: process.env.SUPERADMIN_PASSWORD,
-  // The province hub and the Santa Cruz municipal node.
-  provinceTenant: process.env.PROVINCE_TENANT ?? 'zambales-province',
+  // The single tenant this deployment serves (one LGU per database).
   defaultTenant: process.env.DEFAULT_TENANT ?? 'santacruz-zambales',
   // LGU-OWNED payment gateway (NOT national eGovPay).
   payment: {

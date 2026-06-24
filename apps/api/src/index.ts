@@ -20,7 +20,6 @@ import { reportRoutes } from './reports/routes.js';
 import { paymentsRoutes } from './payments/routes.js';
 import { verifyRoutes } from './verify/routes.js';
 import { publicRoutes } from './public/routes.js';
-import { nodeRoutes } from './node/routes.js';
 import { metaRoutes } from './meta/routes.js';
 
 // Boot the SP runtime: registers the standard domain modules + loads the per-LGU
@@ -45,7 +44,6 @@ await app.register(reportRoutes);
 await app.register(paymentsRoutes);
 await app.register(verifyRoutes);
 await app.register(publicRoutes);
-await app.register(nodeRoutes);
 await app.register(metaRoutes);
 
 // Heartbeat target for the sync-client connectivity detector. Must stay cheap.
@@ -53,11 +51,10 @@ app.get('/healthz', async () => {
   const [pg, rd] = await Promise.allSettled([sql`select 1`, redis.ping()]);
   return {
     ok: pg.status === 'fulfilled' && rd.status === 'fulfilled',
-    role: env.nodeRole,
     db: pg.status === 'fulfilled',
     redis: rd.status === 'fulfilled',
   };
 });
 
 await app.listen({ port: env.port, host: '0.0.0.0' });
-app.log.info(`sp-api (${env.nodeRole}) listening on :${env.port}`);
+app.log.info(`sp-api listening on :${env.port}`);

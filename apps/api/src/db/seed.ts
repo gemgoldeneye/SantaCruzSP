@@ -14,7 +14,6 @@ import { env } from '../env.js';
 const sql = postgres(env.ownerDatabaseUrl, { max: 4 });
 const db = drizzle(sql, { schema });
 
-const PROVINCE = env.provinceTenant;       // 'zambales-province'
 const TENANT = env.defaultTenant;          // 'santacruz-zambales'
 
 const ALL_PERMS = ['page:search', 'page:scan', 'page:sessions', 'page:tracking', 'page:prangkisa', 'page:analytics', 'page:accounts', 'page:roles', 'page:logs', 'documents:create', 'sessions:manage', 'accounts:manage', 'roles:manage'];
@@ -34,28 +33,14 @@ const ROLES: RoleSeed[] = [
 ];
 
 async function main(): Promise<void> {
-  console.log(`Bootstrapping ${santaCruzConfig.municipality.province} province + ${santaCruzConfig.municipality.name}…`);
+  console.log(`Bootstrapping ${santaCruzConfig.municipality.name}…`);
 
-  await db.insert(schema.tenants).values({
-    id: PROVINCE, name: `Province of ${santaCruzConfig.municipality.province}`, shortName: santaCruzConfig.municipality.province, province: santaCruzConfig.municipality.province,
-    type: 'province', parentTenantId: null, lguClass: '1st',
-    enabledOffices: ['sanggunian', 'mtop', 'treasury', 'portal'],
-  }).onConflictDoNothing();
-
+  // Single standalone tenant — this deployment owns ONE LGU's database. No province
+  // hub and no federation data-grants: each LGU is fully isolated in its own DB.
   await db.insert(schema.tenants).values({
     id: TENANT, name: santaCruzConfig.municipality.name, shortName: santaCruzConfig.municipality.shortName, province: santaCruzConfig.municipality.province,
-    type: 'municipality', parentTenantId: PROVINCE, lguClass: santaCruzConfig.tenant.lguClass ?? '4th',
+    type: 'municipality', parentTenantId: null, lguClass: santaCruzConfig.tenant.lguClass ?? '4th',
     enabledOffices: ['sanggunian', 'mtop', 'treasury', 'portal', 'mayor_office'],
-  }).onConflictDoNothing();
-
-  // Federation DSA — the province may read Santa Cruz's PUBLIC/up_projection collections
-  // only (issued MTOPs, enacted ordinances, projects). Applicant PII, payments,
-  // and feedback are local_only and are deliberately NOT granted (confidentialLeak===0).
-  await db.insert(schema.dataGrants).values({
-    granteeTenant: PROVINCE, sourceTenant: TENANT,
-    collections: ['sp.mtop.mtops', 'sp.sanggunian.documents', 'sp.portal.projects'],
-    purpose: 'Provincial oversight & transparency rollups (up_projection)',
-    status: 'active',
   }).onConflictDoNothing();
 
   // ── Roles (admin-facing; carry the platform RBAC mapping) ────────────────────
