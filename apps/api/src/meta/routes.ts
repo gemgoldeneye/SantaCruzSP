@@ -1,17 +1,18 @@
 // Public metadata — no auth (used by the login/portal pickers BEFORE login).
+// Single-tenant: identity comes from the per-LGU config, not a tenants table.
 import type { FastifyInstance } from 'fastify';
-import { eq } from 'drizzle-orm';
 import { OFFICES } from '@gelabs/sp/modules';
-import { db } from '../db/client.js';
-import { tenants } from '@gelabs/sp/data';
-import { env } from '../env.js';
+import { santaCruzConfig } from '@lgu/santacruz';
 
 export async function metaRoutes(app: FastifyInstance): Promise<void> {
   app.get('/meta', async () => {
-    const rows = await db.select({ id: tenants.id, name: tenants.name, shortName: tenants.shortName, type: tenants.type })
-      .from(tenants).where(eq(tenants.id, env.defaultTenant));
     return {
-      tenant: rows[0] ?? { id: env.defaultTenant, name: 'Municipality of Santa Cruz', shortName: 'Santa Cruz', type: 'municipality' },
+      tenant: {
+        id: santaCruzConfig.tenant.tenantId,
+        name: santaCruzConfig.municipality.name,
+        shortName: santaCruzConfig.municipality.shortName,
+        type: 'municipality' as const,
+      },
       offices: OFFICES.map((o) => ({ key: o.key, label: o.label, route: o.route, group: o.group })),
     };
   });
