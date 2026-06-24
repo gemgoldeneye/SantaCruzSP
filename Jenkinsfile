@@ -12,6 +12,7 @@
 // Required Jenkins credentials (Secret text):
 //   sp-database-url · sp-owner-database-url · sp-redis-url · sp-session-secret
 //   sp-payment-webhook-secret · gelabs-npm-token (private @gelabs scope)
+//   sp-superadmin-email · sp-superadmin-password (bootstrap seed — the LGU's first admin login)
 // SSH: zambal-vps-ssh (SSH username with private key).
 
 pipeline {
@@ -74,6 +75,9 @@ pipeline {
           string(credentialsId: 'sp-redis-url',             variable: 'SP_REDIS_URL'),
           string(credentialsId: 'sp-session-secret',        variable: 'SP_SESSION_SECRET'),
           string(credentialsId: 'sp-payment-webhook-secret',variable: 'SP_PAYMENT_WEBHOOK_SECRET'),
+          // Bootstrap superadmin — the LGU's first/only admin login, consumed by the one-time seed.
+          string(credentialsId: 'sp-superadmin-email',      variable: 'SUPERADMIN_EMAIL'),
+          string(credentialsId: 'sp-superadmin-password',   variable: 'SUPERADMIN_PASSWORD'),
           // @gelabs/sp is a PRIVATE scope — needed to build BOTH api and web.
           string(credentialsId: 'gelabs-npm-token',         variable: 'GELABS_NPM_TOKEN')
         ]) {
@@ -94,6 +98,8 @@ export SP_REDIS_URL='${SP_REDIS_URL}'
 export SP_SESSION_SECRET='${SP_SESSION_SECRET}'
 export SP_PAYMENT_WEBHOOK_SECRET='${SP_PAYMENT_WEBHOOK_SECRET}'
 export SP_CORS_ORIGINS='${CORS_ORIGINS}'
+export SUPERADMIN_EMAIL='${SUPERADMIN_EMAIL}'
+export SUPERADMIN_PASSWORD='${SUPERADMIN_PASSWORD}'
 export GELABS_NPM_TOKEN='${GELABS_NPM_TOKEN}'
 export API_REPLICAS='${API_REPLICAS}'
 export WEB_REPLICAS='${WEB_REPLICAS}'

@@ -7,7 +7,8 @@
 #
 #   TAG DOMAIN
 #   SP_DATABASE_URL SP_OWNER_DATABASE_URL SP_REDIS_URL SP_SESSION_SECRET
-#   SP_CORS_ORIGINS GELABS_NPM_TOKEN  [SP_PAYMENT_WEBHOOK_SECRET API_REPLICAS WEB_REPLICAS]
+#   SP_CORS_ORIGINS GELABS_NPM_TOKEN SUPERADMIN_EMAIL SUPERADMIN_PASSWORD
+#   [SP_PAYMENT_WEBHOOK_SECRET API_REPLICAS WEB_REPLICAS]
 set -euo pipefail
 
 : "${TAG:?set TAG to the image tag (git sha)}"
@@ -24,6 +25,10 @@ echo "==> deploying SantaCruzSP $TAG to stack $STACK (env dir: $ENV_DIR)"
 : "${SP_REDIS_URL:?Jenkins must pass SP_REDIS_URL (credential)}"
 : "${SP_SESSION_SECRET:?Jenkins must pass SP_SESSION_SECRET (credential)}"
 : "${SP_CORS_ORIGINS:?Jenkins must pass SP_CORS_ORIGINS (param)}"
+# Bootstrap superadmin — required by the one-time seed (apps/api seed.ts throws
+# without them). Fail fast here, before building images.
+: "${SUPERADMIN_EMAIL:?Jenkins must pass SUPERADMIN_EMAIL (credential sp-superadmin-email)}"
+: "${SUPERADMIN_PASSWORD:?Jenkins must pass SUPERADMIN_PASSWORD (credential sp-superadmin-password)}"
 
 umask 077
 # Single-quote every value: this file is SOURCED below, so values with
@@ -96,6 +101,8 @@ seed_once() {
 seed_once "initial" docker run --rm \
   -e OWNER_DATABASE_URL="$SP_OWNER_DATABASE_URL" \
   -e DATABASE_URL="$SP_DATABASE_URL" \
+  -e SUPERADMIN_EMAIL="$SUPERADMIN_EMAIL" \
+  -e SUPERADMIN_PASSWORD="$SUPERADMIN_PASSWORD" \
   "stcz-sp-api:$TAG" pnpm db:seed
 
 # 4) Rolling deploy. The SHARED edge (deploy/edge/) owns :80/:443 + TLS; this
