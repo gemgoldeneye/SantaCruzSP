@@ -16,7 +16,6 @@ export async function manifestRoutes(app: FastifyInstance): Promise<void> {
       name: env.defaultTenant,
       env: env.isDev ? 'dev' : 'prod',
       tenantId: env.defaultTenant,
-      nodeRole: env.nodeRole,
     },
     version,
     sql,
