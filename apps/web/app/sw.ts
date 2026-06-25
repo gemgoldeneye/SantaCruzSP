@@ -11,8 +11,19 @@ declare global {
 
 declare const self: ServiceWorkerGlobalScope;
 
+// Self-hosted OCR engine assets (public/tesseract/) — precached so document
+// scanning runs FULLY offline. Without these, tesseract.js fetches its WASM core
+// and eng.traineddata from a CDN on first use, which fails with no network.
+const OCR_ASSETS: PrecacheEntry[] = [
+  '/tesseract/worker.min.js',
+  '/tesseract/tesseract-core-lstm.wasm.js',
+  '/tesseract/tesseract-core-simd-lstm.wasm.js',
+  '/tesseract/tesseract-core-relaxedsimd-lstm.wasm.js',
+  '/tesseract/eng.traineddata.gz',
+].map((url) => ({ url, revision: 'tesseract-7.0.0' }));
+
 const serwist = new Serwist({
-  precacheEntries: self.__SW_MANIFEST,
+  precacheEntries: [...(self.__SW_MANIFEST ?? []), ...OCR_ASSETS],
   skipWaiting: true,
   clientsClaim: true,
   navigationPreload: true,
