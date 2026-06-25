@@ -32,17 +32,10 @@ services:
         - npm_token
     environment:
       NODE_ENV: production
-      NODE_ROLE: onprem
-      NODE_ID: onprem-santacruz
-      NODE_TOKEN: ${NODE_TOKEN:?shared peer secret}
-      # Pull province-published config DOWN; push issued MTOPs / enacted ordinances UP.
-      PEERS: '[{"id":"cloud-hub","role":"cloud","baseUrl":"http://cloud-hub:8787","tenants":["santacruz-zambales"]}]'
       DATABASE_URL: postgres://zsp_app:${PG_APP_PASSWORD:?}@postgres:5432/sp
       OWNER_DATABASE_URL: postgres://zsp:${PG_PASSWORD:?}@postgres:5432/sp
       REDIS_URL: redis://redis:6379
       SESSION_SECRET: ${SESSION_SECRET:?}
-      DEFAULT_TENANT: santacruz-zambales
-      PROVINCE_TENANT: zambales-province
     depends_on: [postgres, redis]
 
   # tailscale sidecar (auth key scoped to the "sp-nodes" tailnet, ACL → hub:8787 only)

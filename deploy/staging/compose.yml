@@ -19,15 +19,12 @@ services:
     image: stcz-sp-api:${TAG:-latest}
     environment:
       NODE_ENV: production
-      NODE_ROLE: cloud
       PORT: "8787"
       DATABASE_URL: ${SP_DATABASE_URL}
       OWNER_DATABASE_URL: ${SP_OWNER_DATABASE_URL}
       REDIS_URL: ${SP_REDIS_URL}
       SESSION_SECRET: ${SP_SESSION_SECRET}
       CORS_ORIGINS: ${SP_CORS_ORIGINS}
-      PROVINCE_TENANT: zambales-province
-      DEFAULT_TENANT: santacruz-zambales
       PAYMENT_WEBHOOK_SECRET: ${SP_PAYMENT_WEBHOOK_SECRET:-}
     networks:
       edge: {}

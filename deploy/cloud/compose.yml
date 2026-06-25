@@ -25,14 +25,10 @@ services:
         - npm_token
     environment:
       NODE_ENV: production
-      NODE_ROLE: cloud
-      NODE_ID: cloud-hub
-      NODE_TOKEN: ${NODE_TOKEN:?shared peer secret}
       DATABASE_URL: postgres://zsp_app:${PG_APP_PASSWORD:?}@postgres:5432/sp
       OWNER_DATABASE_URL: postgres://zsp:${PG_PASSWORD:?}@postgres:5432/sp
       REDIS_URL: redis://redis:6379
       SESSION_SECRET: ${SESSION_SECRET:?}
-      PROVINCE_TENANT: zambales-province
     depends_on: [postgres, redis]
 
 # @gelabs/sp is a private npm package — `docker compose build` reads the read token
