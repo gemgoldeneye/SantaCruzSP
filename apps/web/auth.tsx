@@ -9,7 +9,6 @@ import { loginStaff, logoutStaff, restoreSession } from './store';
 
 interface AuthCtx {
   user: User | null;
-  tenantId: string | null;
   ready: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -19,25 +18,24 @@ const Ctx = createContext<AuthCtx | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [tenantId, setTenantId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     void restoreSession().then((res) => {
-      if (res) { setUser(res.user); setTenantId(res.tenantId); }
+      if (res) setUser(res.user);
       setReady(true);
     });
   }, []);
 
   const value: AuthCtx = {
-    user, tenantId, ready,
+    user, ready,
     login: async (username, password) => {
       const res = await loginStaff(username, password);
-      setUser(res.user); setTenantId(res.tenantId);
+      setUser(res.user);
     },
     logout: async () => {
       await logoutStaff();
-      setUser(null); setTenantId(null);
+      setUser(null);
     },
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

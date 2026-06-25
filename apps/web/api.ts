@@ -24,7 +24,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export interface MeResponse { user: User; tenantId: string }
+export interface MeResponse { user: User }
 export interface AnalyticsResponse {
   docsByStage: { stage: string; count: number }[];
   mtopByStatus: { status: string; count: number }[];
