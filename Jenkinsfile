@@ -9,10 +9,11 @@
 //
 // Branch -> env: `staging` branch deploys staging; anything else (main) -> prod.
 //
-// Required Jenkins credentials (Secret text):
-//   sp-database-url · sp-owner-database-url · sp-redis-url · sp-session-secret
-//   sp-payment-webhook-secret · gelabs-npm-token (private @gelabs scope)
-//   sp-superadmin-email · sp-superadmin-password (bootstrap seed — the LGU's first admin login)
+// Required Jenkins credentials (Secret text) — per-codebase + per-env IDs (<env> = staging|prod):
+//   stacruz-sp-database-url-<env> · stacruz-sp-owner-database-url-<env> · stacruz-sp-redis-url-<env>
+//   stacruz-sp-session-secret-<env> · stacruz-sp-payment-webhook-secret-<env>
+//   stacruz-sp-superadmin-email-<env> · stacruz-sp-superadmin-password-<env> (bootstrap seed — first admin login)
+//   gelabs-npm-token (SHARED private @gelabs read token)
 // SSH: zambal-vps-ssh (SSH username with private key).
 
 pipeline {
@@ -70,16 +71,16 @@ pipeline {
     stage('Build + migrate + rolling deploy') {
       steps {
         withCredentials([
-          string(credentialsId: 'sp-database-url',          variable: 'SP_DATABASE_URL'),
-          string(credentialsId: 'sp-owner-database-url',    variable: 'SP_OWNER_DATABASE_URL'),
-          string(credentialsId: 'sp-redis-url',             variable: 'SP_REDIS_URL'),
-          string(credentialsId: 'sp-session-secret',        variable: 'SP_SESSION_SECRET'),
-          string(credentialsId: 'sp-payment-webhook-secret',variable: 'SP_PAYMENT_WEBHOOK_SECRET'),
+          string(credentialsId: "stacruz-sp-database-url-${env.DEPLOY_ENV}",           variable: 'SP_DATABASE_URL'),
+          string(credentialsId: "stacruz-sp-owner-database-url-${env.DEPLOY_ENV}",     variable: 'SP_OWNER_DATABASE_URL'),
+          string(credentialsId: "stacruz-sp-redis-url-${env.DEPLOY_ENV}",             variable: 'SP_REDIS_URL'),
+          string(credentialsId: "stacruz-sp-session-secret-${env.DEPLOY_ENV}",        variable: 'SP_SESSION_SECRET'),
+          string(credentialsId: "stacruz-sp-payment-webhook-secret-${env.DEPLOY_ENV}",variable: 'SP_PAYMENT_WEBHOOK_SECRET'),
           // Bootstrap superadmin — the LGU's first/only admin login, consumed by the one-time seed.
-          string(credentialsId: 'sp-superadmin-email',      variable: 'SUPERADMIN_EMAIL'),
-          string(credentialsId: 'sp-superadmin-password',   variable: 'SUPERADMIN_PASSWORD'),
-          // @gelabs/sp is a PRIVATE scope — needed to build BOTH api and web.
-          string(credentialsId: 'gelabs-npm-token',         variable: 'GELABS_NPM_TOKEN')
+          string(credentialsId: "stacruz-sp-superadmin-email-${env.DEPLOY_ENV}",      variable: 'SUPERADMIN_EMAIL'),
+          string(credentialsId: "stacruz-sp-superadmin-password-${env.DEPLOY_ENV}",   variable: 'SUPERADMIN_PASSWORD'),
+          // @gelabs/sp is a PRIVATE scope (shared org read token) — needed to build BOTH api and web.
+          string(credentialsId: 'gelabs-npm-token',                                    variable: 'GELABS_NPM_TOKEN')
         ]) {
           sshagent(credentials: [env.SSH_CRED]) {
             sh '''
