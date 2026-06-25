@@ -59,19 +59,19 @@ DOCKER_BUILDKIT=1 docker build -f apps/web/Dockerfile -t "stcz-sp-web:$TAG" \
   --secret id=npm_token,env=GELABS_NPM_TOKEN \
   --build-arg NEXT_PUBLIC_API_BASE=http://stcz-sp-api:8787 .
 
-# 2.9) De-tenant SAFETY (auto): while data.documents.tenant_id still exists (i.e.
-#      before the 0003 migration drops it), take a backup and REFUSE to proceed if
-#      the DB holds more than one tenant — dropping tenant_id would merge rows and
-#      collide on the rebuilt primary keys. Self-disables once de-tenanted.
+# 2.9) Pre-migrate SAFETY (auto): ALWAYS back up the DB before migrating (the
+#      rollback story). AND, while data.documents.tenant_id still exists (before the
+#      0003 migration drops it), REFUSE to proceed if the DB holds more than one
+#      tenant — dropping tenant_id would merge rows and collide on the rebuilt primary
+#      keys. The multi-tenant guard self-disables once de-tenanted.
+mkdir -p backups
+docker run --rm -e PGURL="$SP_OWNER_DATABASE_URL" postgres:16-alpine \
+  sh -c 'pg_dump "$PGURL"' > "backups/pre_${TAG}.sql" \
+  && echo "==> backup -> backups/pre_${TAG}.sql ($(wc -c < backups/pre_${TAG}.sql) bytes)"
 q_hastid="SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='data' AND table_name='documents' AND column_name='tenant_id')"
 HAS_TID=$(docker run --rm -e PGURL="$SP_OWNER_DATABASE_URL" postgres:16-alpine \
   sh -c 'psql "$PGURL" -tAc "'"$q_hastid"'"' 2>/dev/null | tr -d '[:space:]')
 if [ "$HAS_TID" = "t" ]; then
-  echo "==> tenant_id present — taking a pre-0003 backup + multi-tenant guard"
-  mkdir -p backups
-  docker run --rm -e PGURL="$SP_OWNER_DATABASE_URL" postgres:16-alpine \
-    sh -c 'pg_dump "$PGURL"' > "backups/predetenant_${TAG}.sql" \
-    && echo "==> backup -> backups/predetenant_${TAG}.sql ($(wc -c < backups/predetenant_${TAG}.sql) bytes)"
   TENANTS=$(docker run --rm -e PGURL="$SP_OWNER_DATABASE_URL" postgres:16-alpine \
     sh -c 'psql "$PGURL" -tAc "SELECT count(DISTINCT tenant_id) FROM data.documents"' 2>/dev/null | tr -d '[:space:]')
   if [ "${TENANTS:-0}" -gt 1 ] 2>/dev/null; then
