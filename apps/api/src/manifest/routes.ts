@@ -4,6 +4,7 @@
 import { createRequire } from 'node:module';
 import type { FastifyInstance } from 'fastify';
 import { createManifestHandler } from '@gelabs/sp/manifest';
+import { santaCruzConfig } from '@lgu/santacruz';
 import { sql } from '../db/client.js';
 import { env } from '../env.js';
 
@@ -13,9 +14,8 @@ const { version } = require('@gelabs/sp/package.json') as { version: string };
 export async function manifestRoutes(app: FastifyInstance): Promise<void> {
   const handle = createManifestHandler({
     app: {
-      name: env.defaultTenant,
+      name: santaCruzConfig.municipality.shortName,
       env: env.isDev ? 'dev' : 'prod',
-      tenantId: env.defaultTenant,
     },
     version,
     sql,

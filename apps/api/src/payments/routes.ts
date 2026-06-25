@@ -16,7 +16,6 @@ import { env } from '../env.js';
 const ORDER_COLLECTION = 'sp.treasury.orders';
 
 const webhookSchema = z.object({
-  tenantId: z.string().min(1).optional(),
   orderId: z.string().uuid(),
   gatewayRef: z.string().min(1),
   method: z.enum(['gcash', 'maya', 'card', 'bank']),
@@ -47,13 +46,12 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const parsed = webhookSchema.safeParse(wrapped.json);
     if (!parsed.success) return reply.code(400).send({ error: 'validation_failed' });
     const { orderId, method, amount, orNo, paymentId, gatewayRef } = parsed.data;
-    const tenantId = parsed.data.tenantId ?? env.defaultTenant;
     const def = getCollection(ORDER_COLLECTION)!;
     const settledAt = new Date().toISOString();
 
-    const result = await withTenantWrite(tenantId, async (tx) => {
+    const result = await withTenantWrite(async (tx) => {
       const rows = await tx.select().from(documents).where(and(
-        eq(documents.tenantId, tenantId), eq(documents.collection, ORDER_COLLECTION), eq(documents.id, orderId),
+        eq(documents.collection, ORDER_COLLECTION), eq(documents.id, orderId),
       )).limit(1);
       const row = rows[0];
       if (!row || row.deletedAt) return { ok: false as const, code: 404 };
@@ -73,12 +71,12 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       const updated = await tx.update(documents).set({
         doc: nextDoc, rowVersion: row.rowVersion + 1, updatedAt: new Date(),
       }).where(and(
-        eq(documents.tenantId, tenantId), eq(documents.collection, ORDER_COLLECTION), eq(documents.id, orderId),
+        eq(documents.collection, ORDER_COLLECTION), eq(documents.id, orderId),
       )).returning();
       const newRow = updated[0]!;
-      await mirrorPromoted(tx, tenantId, def, orderId, nextDoc);
-      await logChange(tx, { tenantId, collection: ORDER_COLLECTION, docId: orderId, op: 'update', rowVersion: newRow.rowVersion, origin: 'gateway' });
-      await audit({ tenantId, actorName: 'lgu_pay gateway', action: 'payment.settled', collection: ORDER_COLLECTION, docId: orderId, detail: { gatewayRef, amount } }, tx);
+      await mirrorPromoted(tx, def, orderId, nextDoc);
+      await logChange(tx, { collection: ORDER_COLLECTION, docId: orderId, op: 'update', rowVersion: newRow.rowVersion, origin: 'gateway' });
+      await audit({ actorName: 'lgu_pay gateway', action: 'payment.settled', collection: ORDER_COLLECTION, docId: orderId, detail: { gatewayRef, amount } }, tx);
       return { ok: true as const, rowVersion: newRow.rowVersion };
     });
 

@@ -1,9 +1,9 @@
 // Citizen identity: OTP register-or-login, sessions, and the requireCitizen guard.
 // Same Redis-cookie mechanism as staff but a SEPARATE cookie (sp_csess) and a
-// 'citizen' discriminator. Citizens belong to the Santa Cruz municipal tenant directly.
+// 'citizen' discriminator. One database per municipality — no tenant concept.
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { v7 as uuidv7 } from 'uuid';
 import { citizenAccounts } from '@gelabs/sp/data';
@@ -18,7 +18,6 @@ const TTL = 30 * 24 * 60 * 60; // 30-day sliding
 
 export interface CitizenIdentity {
   id: string;
-  tenantId: string;
   barangayId: string | null;
   mobile: string;
   name: string;
@@ -69,7 +68,7 @@ const verifySchema = z.object({
 
 function toIdentity(row: typeof citizenAccounts.$inferSelect): CitizenIdentity {
   return {
-    id: row.id, tenantId: row.tenantId, barangayId: row.barangayId, mobile: row.mobile,
+    id: row.id, barangayId: row.barangayId, mobile: row.mobile,
     name: row.name, residentId: row.residentRef, verified: row.verified,
     consentAt: row.consentAt ? row.consentAt.toISOString().slice(0, 10) : null,
     consentVersion: row.consentVersion,
@@ -96,32 +95,31 @@ export async function citizenAuthRoutes(app: FastifyInstance): Promise<void> {
     const body = verifySchema.safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: 'validation_failed' });
     const mobile = normMobile(body.data.mobile);
-    const tenantId = env.defaultTenant;
 
     if (!(await verifyOtp(mobile, body.data.code))) {
       return reply.code(401).send({ error: 'invalid_code' });
     }
 
-    const identity = await withTenantWrite(tenantId, async (tx) => {
-      const existing = await tx.select().from(citizenAccounts).where(and(
-        eq(citizenAccounts.tenantId, tenantId), eq(citizenAccounts.mobile, mobile),
-      )).limit(1);
+    const identity = await withTenantWrite(async (tx) => {
+      const existing = await tx.select().from(citizenAccounts).where(
+        eq(citizenAccounts.mobile, mobile),
+      ).limit(1);
       if (existing[0]) return toIdentity(existing[0]);
 
       if (!body.data.name) return null;
       const id = uuidv7();
       const inserted = await tx.insert(citizenAccounts).values({
-        id, tenantId, barangayId: null, mobile, name: body.data.name,
+        id, barangayId: null, mobile, name: body.data.name,
         verified: false, consentAt: new Date(), consentVersion: body.data.consentVersion ?? '2026-06-01',
       }).returning();
-      await audit({ tenantId, actorId: id, actorName: body.data.name, action: 'citizen.register', detail: { mobile } }, tx);
+      await audit({ actorId: id, actorName: body.data.name, action: 'citizen.register', detail: { mobile } }, tx);
       return toIdentity(inserted[0]!);
     });
 
     if (!identity) return reply.code(409).send({ error: 'registration_needs_name' });
 
     const sessionId = await createSession(identity);
-    await withTenant(tenantId, (tx) => audit({ tenantId, actorId: identity.id, actorName: identity.name, action: 'citizen.login' }, tx));
+    await withTenant((tx) => audit({ actorId: identity.id, actorName: identity.name, action: 'citizen.login' }, tx));
     return reply
       .setCookie(CITIZEN_COOKIE, sessionId, { path: '/', httpOnly: true, sameSite: 'lax', secure: !env.isDev, signed: true })
       .send({ account: identity });

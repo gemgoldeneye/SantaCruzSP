@@ -9,7 +9,6 @@ const TTL_SECONDS = 12 * 60 * 60;
 
 export interface SessionData {
   userId: string;
-  tenantId: string;
   user: User;
 }
 

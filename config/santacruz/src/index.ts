@@ -26,7 +26,6 @@ export const santaCruzConfig = defineSpConfig({
 
   tenant: {
     tenantId: 'santacruz-zambales',
-    provinceTenant: 'zambales-province',
     emailDomain: 'santacruz.gov.ph',
     devCitizenOtp: '123456',
   },

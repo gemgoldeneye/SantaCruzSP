@@ -14,10 +14,9 @@ export async function notificationRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', requireUser);
 
   app.get('/api/notifications', async (req) => {
-    const tenantId = req.tenantId!;
     const q = req.query as { limit?: string };
     const limit = Math.min(Math.max(Number(q.limit ?? 40) || 40, 1), 200);
-    return withTenant(tenantId, async (tx) => {
+    return withTenant(async (tx) => {
       const rows = await tx.execute(rawSql`
         SELECT a.seq, a.at, a.actor_name AS "actorName", a.actor_role AS "actorRole",
                a.action, a.collection, a.doc_id AS "docId",
@@ -25,9 +24,8 @@ export async function notificationRoutes(app: FastifyInstance): Promise<void> {
                d.doc->>'applicantName' AS "applicantName"
         FROM platform.audit_events a
         LEFT JOIN data.documents d
-          ON d.tenant_id = a.tenant_id AND d.collection = a.collection AND d.id = a.doc_id
-        WHERE a.tenant_id = ${tenantId}
-          AND a.action = 'create'
+          ON d.collection = a.collection AND d.id = a.doc_id
+        WHERE a.action = 'create'
           AND a.collection IN (
             'sp.sanggunian.documents',
             'sp.sanggunian.sessions',

@@ -26,12 +26,10 @@ export type IngestActor =
   | { kind: 'citizen'; account: { id: string; name: string; barangayId: string | null } };
 
 /** Batch-load recorded actors (users + memberships) once per push. */
-export async function loadActors(tenantId: string, userIds: string[]): Promise<Map<string, User>> {
+export async function loadActors(userIds: string[]): Promise<Map<string, User>> {
   const map = new Map<string, User>();
   if (userIds.length === 0) return map;
-  const rows = await db.select().from(users).where(and(
-    eq(users.tenantId, tenantId), inArray(users.id, userIds),
-  ));
+  const rows = await db.select().from(users).where(inArray(users.id, userIds));
   const mems = await db.select().from(membershipsTable).where(inArray(membershipsTable.userId, userIds));
   // The actor's legacy permission keys (e.g. sessions:manage) come from the role
   // assigned to the user — needed for collection-specific gates in ingest.
@@ -66,18 +64,17 @@ function unionAppend(existing: unknown, incoming: unknown[]): unknown[] {
   return base;
 }
 
-interface RejectArgs { tx: TenantTx; tenantId: string; m: MutationEnvelope; reason: string; detail?: unknown }
+interface RejectArgs { tx: TenantTx; m: MutationEnvelope; reason: string; detail?: unknown }
 
-async function recordRejection({ tx, tenantId, m, reason, detail }: RejectArgs): Promise<void> {
-  await tx.insert(syncRejections).values({ mutationId: m.id, tenantId, reason, detail: detail ?? null });
+async function recordRejection({ tx, m, reason, detail }: RejectArgs): Promise<void> {
+  await tx.insert(syncRejections).values({ mutationId: m.id, reason, detail: detail ?? null });
 }
 
 export async function ingestMutation(
-  tenantId: string,
   m: MutationEnvelope,
   actorCtx: IngestActor | null,
 ): Promise<PushResultEntry> {
-  return withTenantWrite(tenantId, async (tx): Promise<PushResultEntry> => {
+  return withTenantWrite(async (tx): Promise<PushResultEntry> => {
     // ── Idempotency: replays return the recorded result, never re-execute ────
     const prior = await tx.select().from(mutations).where(eq(mutations.id, m.id)).limit(1);
     if (prior[0]) {
@@ -96,7 +93,7 @@ export async function ingestMutation(
 
     const writeLedger = async (status: LedgerStatus, resultVersion?: number, error?: unknown) => {
       await tx.insert(mutations).values({
-        id: m.id, tenantId, actorKind: actorCtx?.kind ?? 'staff', actorId: act.id,
+        id: m.id, actorKind: actorCtx?.kind ?? 'staff', actorId: act.id,
         deviceId: m.actor.deviceId, collection: m.collection, docId: m.entityId,
         op: m.op, baseVersion: m.baseVersion, payload: (m.payload ?? {}) as object,
         status, resultVersion: resultVersion ?? null,
@@ -106,7 +103,7 @@ export async function ingestMutation(
     };
     const reject = async (code: string, detail?: unknown, serverRow?: unknown): Promise<PushResultEntry> => {
       await writeLedger('rejected', undefined, { code, detail });
-      await recordRejection({ tx, tenantId, m, reason: code, ...(detail !== undefined ? { detail } : {}) });
+      await recordRejection({ tx, m, reason: code, ...(detail !== undefined ? { detail } : {}) });
       const entry: PushResultEntry = { id: m.id, status: 'rejected', code: code as never };
       if (detail !== undefined) entry.detail = typeof detail === 'string' ? detail : JSON.stringify(detail).slice(0, 500);
       if (serverRow !== undefined) entry.serverRow = serverRow;
@@ -131,7 +128,7 @@ export async function ingestMutation(
 
     const loadDoc = async () => {
       const rows = await tx.select().from(documents).where(and(
-        eq(documents.tenantId, tenantId), eq(documents.collection, def.key), eq(documents.id, m.entityId),
+        eq(documents.collection, def.key), eq(documents.id, m.entityId),
       )).limit(1);
       return rows[0] ?? null;
     };
@@ -156,7 +153,7 @@ export async function ingestMutation(
           return { id: m.id, status: 'acked', serverVersion: existing.rowVersion };
         }
         const inserted = await tx.insert(documents).values({
-          tenantId, collection: def.key, id: m.entityId,
+          collection: def.key, id: m.entityId,
           ref: typeof body.ref === 'string' && body.ref.length > 0 ? body.ref : null,
           doc: body, docVersion: def.docVersion,
           barangayId: typeof body.barangayId === 'string' ? body.barangayId : null,
@@ -164,10 +161,10 @@ export async function ingestMutation(
         }).returning();
         const row = inserted[0]!;
         const wf = body.wf as WorkflowInstance | undefined;
-        if (wf && getWorkflow(wf.def)) await upsertInstanceFromDoc(tx, tenantId, def.key, m.entityId, wf);
-        await mirrorPromoted(tx, tenantId, def, m.entityId, body);
-        await logChange(tx, { tenantId, collection: def.key, docId: m.entityId, op: 'create', rowVersion: row.rowVersion, mutationId: m.id });
-        await audit({ tenantId, actorId: act.id, actorName: act.name, actorRole: act.role, action: 'create', collection: def.key, docId: m.entityId, mutationId: m.id }, tx);
+        if (wf && getWorkflow(wf.def)) await upsertInstanceFromDoc(tx, def.key, m.entityId, wf);
+        await mirrorPromoted(tx, def, m.entityId, body);
+        await logChange(tx, { collection: def.key, docId: m.entityId, op: 'create', rowVersion: row.rowVersion, mutationId: m.id });
+        await audit({ actorId: act.id, actorName: act.name, actorRole: act.role, action: 'create', collection: def.key, docId: m.entityId, mutationId: m.id }, tx);
         await writeLedger('applied', row.rowVersion);
         return { id: m.id, status: 'acked', serverVersion: row.rowVersion };
       }
@@ -230,22 +227,22 @@ export async function ingestMutation(
         const updated = await tx.update(documents).set({
           doc: nextDoc, rowVersion: existing.rowVersion + 1, updatedAt: new Date(), updatedBy: act.id,
         }).where(and(
-          eq(documents.tenantId, tenantId), eq(documents.collection, def.key), eq(documents.id, m.entityId),
+          eq(documents.collection, def.key), eq(documents.id, m.entityId),
         )).returning();
         const row = updated[0]!;
-        await mirrorPromoted(tx, tenantId, def, m.entityId, nextDoc);
-        await logChange(tx, { tenantId, collection: def.key, docId: m.entityId, op: 'update', rowVersion: row.rowVersion, mutationId: m.id });
+        await mirrorPromoted(tx, def, m.entityId, nextDoc);
+        await logChange(tx, { collection: def.key, docId: m.entityId, op: 'update', rowVersion: row.rowVersion, mutationId: m.id });
         for (const f of touchedAttest) {
           const ref = nextDoc[f] as { provider?: string; value?: string; attachmentId?: string; source?: string } | undefined;
           if (ref && ref.source === 'manual') {
-            await audit({ tenantId, actorId: act.id, actorName: act.name, actorRole: act.role,
+            await audit({ actorId: act.id, actorName: act.name, actorRole: act.role,
               action: `attest.${ref.provider ?? 'unknown'}`, collection: def.key, docId: m.entityId,
               detail: { field: f, value: ref.value, attachmentId: ref.attachmentId ?? null }, mutationId: m.id }, tx);
           }
         }
         const otherFields = patchedFields.filter((f) => !touchedAttest.includes(f));
         if (otherFields.length > 0) {
-          await audit({ tenantId, actorId: act.id, actorName: act.name, actorRole: act.role, action: 'update', collection: def.key, docId: m.entityId, detail: { fields: otherFields }, mutationId: m.id }, tx);
+          await audit({ actorId: act.id, actorName: act.name, actorRole: act.role, action: 'update', collection: def.key, docId: m.entityId, detail: { fields: otherFields }, mutationId: m.id }, tx);
         }
         await writeLedger('applied', row.rowVersion);
         return { id: m.id, status: 'acked', serverVersion: row.rowVersion };
@@ -266,12 +263,12 @@ export async function ingestMutation(
         const updated = await tx.update(documents).set({
           doc: nextDoc, rowVersion: existing.rowVersion + 1, updatedAt: new Date(), updatedBy: act.id,
         }).where(and(
-          eq(documents.tenantId, tenantId), eq(documents.collection, def.key), eq(documents.id, m.entityId),
+          eq(documents.collection, def.key), eq(documents.id, m.entityId),
         )).returning();
         const row = updated[0]!;
-        await mirrorPromoted(tx, tenantId, def, m.entityId, nextDoc);
-        await logChange(tx, { tenantId, collection: def.key, docId: m.entityId, op: 'append', rowVersion: row.rowVersion, mutationId: m.id });
-        await audit({ tenantId, actorId: act.id, actorName: act.name, actorRole: act.role, action: 'append', collection: def.key, docId: m.entityId, detail: { field, count: events.length }, mutationId: m.id }, tx);
+        await mirrorPromoted(tx, def, m.entityId, nextDoc);
+        await logChange(tx, { collection: def.key, docId: m.entityId, op: 'append', rowVersion: row.rowVersion, mutationId: m.id });
+        await audit({ actorId: act.id, actorName: act.name, actorRole: act.role, action: 'append', collection: def.key, docId: m.entityId, detail: { field, count: events.length }, mutationId: m.id }, tx);
         await writeLedger('applied', row.rowVersion);
         return { id: m.id, status: 'acked', serverVersion: row.rowVersion };
       }
@@ -287,11 +284,11 @@ export async function ingestMutation(
         const updated = await tx.update(documents).set({
           deletedAt: new Date(), rowVersion: existing.rowVersion + 1, updatedAt: new Date(), updatedBy: act.id,
         }).where(and(
-          eq(documents.tenantId, tenantId), eq(documents.collection, def.key), eq(documents.id, m.entityId),
+          eq(documents.collection, def.key), eq(documents.id, m.entityId),
         )).returning();
         const row = updated[0]!;
-        await logChange(tx, { tenantId, collection: def.key, docId: m.entityId, op: 'delete', rowVersion: row.rowVersion, mutationId: m.id });
-        await audit({ tenantId, actorId: act.id, actorName: act.name, actorRole: act.role, action: 'delete', collection: def.key, docId: m.entityId, mutationId: m.id }, tx);
+        await logChange(tx, { collection: def.key, docId: m.entityId, op: 'delete', rowVersion: row.rowVersion, mutationId: m.id });
+        await audit({ actorId: act.id, actorName: act.name, actorRole: act.role, action: 'delete', collection: def.key, docId: m.entityId, mutationId: m.id }, tx);
         await writeLedger('applied', row.rowVersion);
         return { id: m.id, status: 'acked', serverVersion: row.rowVersion };
       }
@@ -301,7 +298,7 @@ export async function ingestMutation(
         const parsed = transitionPayloadSchema.safeParse(m.payload);
         if (!parsed.success) return reject('validation_failed', parsed.error.issues.slice(0, 5));
         const outcome = await applyTransition(tx, {
-          tenantId, collection: def.key, docId: m.entityId,
+          collection: def.key, docId: m.entityId,
           payload: parsed.data, actor: staffUser, mutationId: m.id,
         });
         switch (outcome.status) {

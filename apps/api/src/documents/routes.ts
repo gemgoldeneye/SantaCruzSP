@@ -23,9 +23,9 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const def = getCollection(collection);
     if (!def) return reply.code(404).send({ error: 'unknown_collection' });
     if (!assertCan(req, reply, 'view', def.office ?? '__none__')) return;
-    return withTenant(req.tenantId!, async (tx) => {
+    return withTenant(async (tx) => {
       const rows = await tx.select().from(documents).where(and(
-        eq(documents.tenantId, req.tenantId!), eq(documents.collection, def.key), isNull(documents.deletedAt),
+        eq(documents.collection, def.key), isNull(documents.deletedAt),
       )).limit(2000);
       return { items: rows.map(rowToDto) };
     });
@@ -36,9 +36,9 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     const def = getCollection(collection);
     if (!def) return reply.code(404).send({ error: 'unknown_collection' });
     if (!can(req.user!, 'view', def.office ?? '__none__')) return reply.code(403).send({ error: 'permission_denied' });
-    return withTenant(req.tenantId!, async (tx) => {
+    return withTenant(async (tx) => {
       const rows = await tx.select().from(documents).where(and(
-        eq(documents.tenantId, req.tenantId!), eq(documents.collection, def.key), eq(documents.id, id),
+        eq(documents.collection, def.key), eq(documents.id, id),
       )).limit(1);
       const row = rows[0];
       if (!row || row.deletedAt) return reply.code(404).send({ error: 'not_found' });

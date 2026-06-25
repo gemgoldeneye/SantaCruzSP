@@ -22,8 +22,6 @@ export const env = {
   // Bootstrap superadmin (created by `db:seed`): the LGU's first/only admin login.
   superAdminEmail: process.env.SUPERADMIN_EMAIL,
   superAdminPassword: process.env.SUPERADMIN_PASSWORD,
-  // The single tenant this deployment serves (one LGU per database).
-  defaultTenant: process.env.DEFAULT_TENANT ?? 'santacruz-zambales',
   // LGU-OWNED payment gateway (NOT national eGovPay).
   payment: {
     provider: process.env.PAYMENT_PROVIDER ?? 'lgu_pay',

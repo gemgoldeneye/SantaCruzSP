@@ -7,12 +7,11 @@ import { getSession, SESSION_COOKIE } from './session.js';
 declare module 'fastify' {
   interface FastifyRequest {
     user?: User;
-    tenantId?: string;
     sessionId?: string;
   }
 }
 
-/** preHandler: requires a live session; populates request.user/tenantId. */
+/** preHandler: requires a live session; populates request.user. */
 export async function requireUser(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const raw = req.cookies[SESSION_COOKIE];
   if (!raw) { await reply.code(401).send({ error: 'unauthenticated' }); return; }
@@ -21,7 +20,6 @@ export async function requireUser(req: FastifyRequest, reply: FastifyReply): Pro
   const session = await getSession(unsigned.value);
   if (!session) { await reply.code(401).send({ error: 'session_expired' }); return; }
   req.user = session.user;
-  req.tenantId = session.tenantId;
   req.sessionId = unsigned.value;
 }
 

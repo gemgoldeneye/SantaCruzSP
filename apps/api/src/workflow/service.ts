@@ -15,16 +15,16 @@ import { audit } from '../audit.js';
 
 /** Mirror a document's embedded wf into the relational tables (create path). */
 export async function upsertInstanceFromDoc(
-  tx: TenantTx, tenantId: string, collection: string, docId: string, wf: WorkflowInstance,
+  tx: TenantTx, collection: string, docId: string, wf: WorkflowInstance,
 ): Promise<void> {
   const def = getWorkflow(wf.def);
   const completed = def ? wf.current >= def.steps.length : false;
   const currentOffice = def && !completed ? def.steps[wf.current]?.office ?? null : null;
   await tx.insert(workflowInstances).values({
-    tenantId, collection, docId, defKey: wf.def,
+    collection, docId, defKey: wf.def,
     currentStep: wf.current, completed, currentOffice,
   }).onConflictDoUpdate({
-    target: [workflowInstances.tenantId, workflowInstances.collection, workflowInstances.docId],
+    target: [workflowInstances.collection, workflowInstances.docId],
     set: { currentStep: wf.current, completed, currentOffice, updatedAt: new Date() },
   });
 }
@@ -43,14 +43,14 @@ export type TransitionOutcome =
 export async function applyTransition(
   tx: TenantTx,
   args: {
-    tenantId: string; collection: string; docId: string;
+    collection: string; docId: string;
     payload: TransitionPayload; actor: User; mutationId?: string;
   },
 ): Promise<TransitionOutcome> {
-  const { tenantId, collection, docId, payload, actor } = args;
+  const { collection, docId, payload, actor } = args;
 
   const rows = await tx.select().from(documents).where(and(
-    eq(documents.tenantId, tenantId), eq(documents.collection, collection), eq(documents.id, docId),
+    eq(documents.collection, collection), eq(documents.id, docId),
   )).limit(1);
   const row = rows[0];
   if (!row || row.deletedAt) return { status: 'not_found' };
@@ -90,7 +90,7 @@ export async function applyTransition(
   const updated = await tx.update(documents).set({
     doc: nextDoc, rowVersion: row.rowVersion + 1, updatedAt: new Date(), updatedBy: actor.id,
   }).where(and(
-    eq(documents.tenantId, tenantId), eq(documents.collection, collection), eq(documents.id, docId),
+    eq(documents.collection, collection), eq(documents.id, docId),
   )).returning();
   const newRow = updated[0]!;
 
@@ -99,24 +99,23 @@ export async function applyTransition(
     currentOffice: completed ? null : def.steps[expectedTo]?.office ?? null,
     updatedAt: new Date(),
   }).where(and(
-    eq(workflowInstances.tenantId, tenantId),
     eq(workflowInstances.collection, collection),
     eq(workflowInstances.docId, docId),
   ));
 
   await tx.insert(workflowEvents).values({
-    tenantId, collection, docId,
+    collection, docId,
     stepKey: step.key, decision,
     actorId: actor.id, actorName: payload.event.actor, actorRole: payload.event.role ?? null,
     remarks: payload.event.remarks ?? null,
   });
 
   await logChange(tx, {
-    tenantId, collection, docId, op: 'transition', rowVersion: newRow.rowVersion,
+    collection, docId, op: 'transition', rowVersion: newRow.rowVersion,
     ...(args.mutationId !== undefined ? { mutationId: args.mutationId } : {}),
   });
   await audit({
-    tenantId, actorId: actor.id, actorName: actor.name, actorRole: actor.role,
+    actorId: actor.id, actorName: actor.name, actorRole: actor.role,
     action: decision === 'approved' ? 'wf.advance' : 'wf.return',
     collection, docId,
     detail: { step: step.key, remarks: payload.event.remarks ?? null },

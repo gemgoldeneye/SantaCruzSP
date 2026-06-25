@@ -24,9 +24,9 @@ async function transitionHandler(
   const remarks = (req.body as { remarks?: string } | null)?.remarks;
   const user = req.user!;
 
-  const outcome = await withTenantWrite(req.tenantId!, async (tx) => {
+  const outcome = await withTenantWrite(async (tx) => {
     const rows = await tx.select().from(documents).where(and(
-      eq(documents.tenantId, req.tenantId!), eq(documents.collection, def.key), eq(documents.id, id),
+      eq(documents.collection, def.key), eq(documents.id, id),
     )).limit(1);
     const row = rows[0];
     if (!row || row.deletedAt) return { status: 'not_found' as const };
@@ -47,7 +47,7 @@ async function transitionHandler(
         ...(remarks !== undefined ? { remarks } : {}),
       },
     };
-    return applyTransition(tx, { tenantId: req.tenantId!, collection: def.key, docId: id, payload, actor: user });
+    return applyTransition(tx, { collection: def.key, docId: id, payload, actor: user });
   });
 
   switch (outcome.status) {
@@ -68,11 +68,10 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
   /** Pending workflow steps the current user can act on, across all offices. */
   app.get('/api/inbox', async (req) => {
     const user = req.user!;
-    return withTenant(req.tenantId!, async (tx) => {
-      const pending = await tx.select().from(workflowInstances).where(and(
-        eq(workflowInstances.tenantId, req.tenantId!),
+    return withTenant(async (tx) => {
+      const pending = await tx.select().from(workflowInstances).where(
         eq(workflowInstances.completed, false),
-      )).limit(1000);
+      ).limit(1000);
 
       const actionable = pending.filter((p) => {
         const wdef = getWorkflow(p.defKey);
@@ -89,7 +88,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
       }
       const docRows = (await Promise.all([...byCollection.entries()].map(([coll, ids]) =>
         tx.select().from(documents).where(and(
-          eq(documents.tenantId, req.tenantId!), eq(documents.collection, coll), inArray(documents.id, ids),
+          eq(documents.collection, coll), inArray(documents.id, ids),
         )),
       ))).flat();
       const docByKey = new Map(docRows.map((d) => [`${d.collection} ${d.id}`, d]));

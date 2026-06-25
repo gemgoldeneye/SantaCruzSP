@@ -4,7 +4,6 @@ import { changeLog } from '@gelabs/sp/data';
 import type { TenantTx } from '../db/tenant.js';
 
 export interface ChangeInput {
-  tenantId: string;
   collection: string;
   docId: string;
   op: 'create' | 'update' | 'delete' | 'append' | 'transition';
@@ -15,7 +14,6 @@ export interface ChangeInput {
 
 export async function logChange(tx: TenantTx, input: ChangeInput): Promise<void> {
   await tx.insert(changeLog).values({
-    tenantId: input.tenantId,
     collection: input.collection,
     docId: input.docId,
     op: input.op,

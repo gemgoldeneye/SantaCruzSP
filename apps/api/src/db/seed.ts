@@ -1,7 +1,7 @@
-// Bootstrap seed — runs as the OWNER role (bypasses RLS). Provisions the Zambales
-// province hub + the Santa Cruz municipal tenant, the 5 platform roles, and ONE
-// superadmin (from SUPERADMIN_* env). A TRUE blank slate: the LGU sets up its own
-// roster, committees, zones, TODAs, fees, projects and accounts in-app.
+// Bootstrap seed — runs as the OWNER role. Single-LGU per database (no tenant
+// concept): provisions the 5 platform roles and ONE superadmin (from SUPERADMIN_*
+// env). A TRUE blank slate: the LGU sets up its own roster, committees, zones,
+// TODAs, fees, projects and accounts in-app.
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { hash as argonHash } from '@node-rs/argon2';
@@ -13,8 +13,6 @@ import { env } from '../env.js';
 
 const sql = postgres(env.ownerDatabaseUrl, { max: 4 });
 const db = drizzle(sql, { schema });
-
-const TENANT = env.defaultTenant;          // 'santacruz-zambales'
 
 const ALL_PERMS = ['page:search', 'page:scan', 'page:sessions', 'page:tracking', 'page:prangkisa', 'page:analytics', 'page:accounts', 'page:roles', 'page:logs', 'documents:create', 'sessions:manage', 'accounts:manage', 'roles:manage'];
 
@@ -35,23 +33,15 @@ const ROLES: RoleSeed[] = [
 async function main(): Promise<void> {
   console.log(`Bootstrapping ${santaCruzConfig.municipality.name}…`);
 
-  // Single standalone tenant — this deployment owns ONE LGU's database. No province
-  // hub and no federation data-grants: each LGU is fully isolated in its own DB.
-  await db.insert(schema.tenants).values({
-    id: TENANT, name: santaCruzConfig.municipality.name, shortName: santaCruzConfig.municipality.shortName, province: santaCruzConfig.municipality.province,
-    type: 'municipality', parentTenantId: null, lguClass: santaCruzConfig.tenant.lguClass ?? '4th',
-    enabledOffices: ['sanggunian', 'mtop', 'treasury', 'portal', 'mayor_office'],
-  }).onConflictDoNothing();
-
   // ── Roles (admin-facing; carry the platform RBAC mapping) ────────────────────
   for (const r of ROLES) {
     await db.insert(schema.roles).values({
-      tenantId: TENANT, key: r.key, name: r.name, description: r.description,
+      key: r.key, name: r.name, description: r.description,
       isStaff: r.isStaff, isSystem: true, permissions: r.permissions,
       roleKey: r.roleKey, offices: r.offices, memberships: r.memberships,
     }).onConflictDoNothing();
   }
-  const roleRows = await sql<{ id: string; key: string }[]>`SELECT id, key FROM platform.roles WHERE tenant_id = ${TENANT}`;
+  const roleRows = await sql<{ id: string; key: string }[]>`SELECT id, key FROM platform.roles`;
   const roleIdByKey = new Map(roleRows.map((r) => [r.key, r.id]));
 
   // ── ONE superadmin from env (its own password, NOT a demo account) ───────────
@@ -62,14 +52,14 @@ async function main(): Promise<void> {
   const roleId = roleIdByKey.get(admin.key) ?? null;
   const passwordHash = await argonHash(env.superAdminPassword);
   await db.insert(schema.users).values({
-    id: uuidv7(), tenantId: TENANT, username: env.superAdminEmail, name: 'System Administrator',
+    id: uuidv7(), username: env.superAdminEmail, name: 'System Administrator',
     role: 'lgu_admin', title: admin.title, offices: admin.offices, initials: 'AD',
     passwordHash, roleId, isDemo: false,
   }).onConflictDoNothing();
   // Resolve the actual user id (insert may have conflicted on a prior run) and
   // (re)link role + memberships + RE-APPLY the superadmin password idempotently,
   // so rotating SUPERADMIN_PASSWORD in Jenkins takes effect on the next deploy.
-  const rows = await sql<{ id: string }[]>`SELECT id FROM platform.users WHERE tenant_id = ${TENANT} AND username = ${env.superAdminEmail} LIMIT 1`;
+  const rows = await sql<{ id: string }[]>`SELECT id FROM platform.users WHERE username = ${env.superAdminEmail} LIMIT 1`;
   const uid = rows[0]?.id;
   if (uid) {
     await sql`UPDATE platform.users SET role_id = ${roleId}, is_demo = false, password_hash = ${passwordHash} WHERE id = ${uid}`;
@@ -78,7 +68,7 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log(`Bootstrap seed complete. Superadmin: ${env.superAdminEmail} (tenant ${TENANT}). No demo data.`);
+  console.log(`Bootstrap seed complete. Superadmin: ${env.superAdminEmail}. No demo data.`);
   await sql.end();
 }
 

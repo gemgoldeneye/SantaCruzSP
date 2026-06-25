@@ -20,8 +20,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const PULL_LIMIT = 500;
 
 type SyncActor =
-  | { kind: 'staff'; user: User; tenantId: string }
-  | { kind: 'citizen'; citizen: CitizenIdentity; tenantId: string };
+  | { kind: 'staff'; user: User }
+  | { kind: 'citizen'; citizen: CitizenIdentity };
 
 /** Resolve a staff OR citizen session from the request cookies. */
 async function getSyncActor(req: FastifyRequest): Promise<SyncActor | null> {
@@ -30,7 +30,7 @@ async function getSyncActor(req: FastifyRequest): Promise<SyncActor | null> {
     const u = req.unsignCookie(staffRaw);
     if (u.valid && u.value) {
       const s = await getSession(u.value);
-      if (s) return { kind: 'staff', user: s.user, tenantId: s.tenantId };
+      if (s) return { kind: 'staff', user: s.user };
     }
   }
   const citRaw = req.cookies[CITIZEN_COOKIE];
@@ -38,7 +38,7 @@ async function getSyncActor(req: FastifyRequest): Promise<SyncActor | null> {
     const u = req.unsignCookie(citRaw);
     if (u.valid && u.value) {
       const c = await getCitizenSession(u.value);
-      if (c) return { kind: 'citizen', citizen: c, tenantId: c.tenantId };
+      if (c) return { kind: 'citizen', citizen: c };
     }
   }
   return null;
@@ -60,7 +60,6 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: 'validation_failed', detail: 'invalid push envelope' });
     }
 
-    const tenantId = actor.tenantId;
     const results: PushResultEntry[] = [];
 
     // Split well-formed mutations from malformed ones. Malformed ones get a
@@ -80,11 +79,11 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
     if (actor.kind === 'staff') {
       // Staff: validate each mutation against its RECORDED actor (shared desks).
       const actorIds = [...new Set(valid.map((m) => m.actor.userId))];
-      const actors = await loadActors(tenantId, actorIds);
+      const actors = await loadActors(actorIds);
       for (const m of valid) {
         const u = actors.get(m.actor.userId);
         const ctx: IngestActor | null = u ? { kind: 'staff', user: u } : null;
-        results.push(await ingestMutation(tenantId, m, ctx));
+        results.push(await ingestMutation(m, ctx));
       }
     } else {
       // Citizen: the session IS the actor; may only create own records.
@@ -93,7 +92,7 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
         account: { id: actor.citizen.id, name: actor.citizen.name, barangayId: actor.citizen.barangayId },
       };
       for (const m of valid) {
-        results.push(await ingestMutation(tenantId, m, ctx));
+        results.push(await ingestMutation(m, ctx));
       }
     }
     return { results };
@@ -102,7 +101,6 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/sync/pull', async (req, reply) => {
     const actor = await getSyncActor(req);
     if (!actor) return reply.code(401).send({ error: 'unauthenticated' });
-    const tenantId = actor.tenantId;
     const q = req.query as { cursor?: string };
     const cursor = Number(q.cursor ?? 0) || 0;
 
@@ -114,9 +112,8 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
     const citizenAccessByKey = new Map(allowedDefs.map((d) => [d.key, d.citizenAccess]));
     if (allowed.length === 0) return { changes: [], cursor: String(cursor), hasMore: false };
 
-    return withTenant(tenantId, async (tx) => {
+    return withTenant(async (tx) => {
       const rows = await tx.select().from(changeLog).where(and(
-        eq(changeLog.tenantId, tenantId),
         gt(changeLog.seq, cursor),
         inArray(changeLog.collection, allowed),
       )).orderBy(changeLog.seq).limit(PULL_LIMIT);
@@ -135,7 +132,7 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
       }
       const docRows = (await Promise.all([...byCollection.entries()].map(([coll, ids]) =>
         tx.select().from(documents).where(and(
-          eq(documents.tenantId, tenantId), eq(documents.collection, coll), inArray(documents.id, ids),
+          eq(documents.collection, coll), inArray(documents.id, ids),
         )),
       ))).flat();
       const docByKey = new Map(docRows.map((d) => [`${d.collection} ${d.id}`, d]));
@@ -174,12 +171,11 @@ export async function syncRoutes(app: FastifyInstance): Promise<void> {
       ? (b.resolution as string) : 'acknowledged';
     if (!collection || !entityId) return reply.code(400).send({ error: 'validation_failed' });
 
-    const tenantId = actor.tenantId;
     const who = actor.kind === 'staff'
       ? { id: actor.user.id, name: actor.user.name, role: actor.user.role }
       : { id: actor.citizen.id, name: actor.citizen.name, role: 'citizen' };
-    await withTenant(tenantId, (tx) => audit({
-      tenantId, actorId: who.id, actorName: who.name, actorRole: who.role,
+    await withTenant((tx) => audit({
+      actorId: who.id, actorName: who.name, actorRole: who.role,
       action: `sync.resolve.${resolution}`, collection,
       ...(UUID_RE.test(entityId) ? { docId: entityId } : {}),
       detail: { code, op, ...(UUID_RE.test(entityId) ? {} : { entityId }) },

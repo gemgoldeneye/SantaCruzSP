@@ -29,14 +29,13 @@ export async function refRoutes(app: FastifyInstance): Promise<void> {
     if (!def) return reply.code(404).send({ error: 'unknown_collection' });
     if (!assertCan(req, reply, 'encode', def.office ?? '__none__')) return;
 
-    const lease = await withTenantWrite(req.tenantId!, async (tx) => {
+    const lease = await withTenantWrite(async (tx) => {
       await tx.insert(refCounters)
-        .values({ tenantId: req.tenantId!, collection, series, next: 1 })
+        .values({ collection, series, next: 1 })
         .onConflictDoNothing();
       const rows = await tx.update(refCounters)
         .set({ next: rawSql`${refCounters.next} + ${count}` })
         .where(and(
-          eq(refCounters.tenantId, req.tenantId!),
           eq(refCounters.collection, collection),
           eq(refCounters.series, series),
         )).returning();
@@ -44,11 +43,11 @@ export async function refRoutes(app: FastifyInstance): Promise<void> {
       const start = next - count;
       const end = next - 1;
       await tx.insert(refLeases).values({
-        tenantId: req.tenantId!, collection, series, deviceId,
+        collection, series, deviceId,
         leasedTo: req.user!.id, rangeStart: start, rangeEnd: end,
       });
       await audit({
-        tenantId: req.tenantId!, actorId: req.user!.id, actorName: req.user!.name,
+        actorId: req.user!.id, actorName: req.user!.name,
         actorRole: req.user!.role, action: 'refs.lease', collection,
         detail: { series, start, end, deviceId },
       }, tx);

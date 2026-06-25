@@ -1,9 +1,9 @@
 // Promoted relational mirrors. The JSONB document in data.documents stays
 // authoritative; these tables give ZambalesSP the relational guarantees tanglaw's
 // pure-document model can't: vote uniqueness, the COA money trail, and an atomic
-// zone-capacity counter. Mirroring runs inside the same tenant write-transaction
-// as the document write, so the relational copy can never diverge.
-import { and, eq } from 'drizzle-orm';
+// zone-capacity counter. Mirroring runs inside the same write-transaction as the
+// document write, so the relational copy can never diverge.
+import { eq } from 'drizzle-orm';
 import type { CollectionDef } from '@gelabs/sp/contracts';
 import { paymentOrders, payments, voteRecords, zoneCounters } from '@gelabs/sp/data';
 import type { TenantTx } from '../db/tenant.js';
@@ -12,7 +12,7 @@ interface VoteTally { yes?: number; no?: number; abstain?: number; absent?: numb
 interface PaymentRow { id: string; method: 'gcash' | 'maya' | 'card' | 'bank'; orNo?: string; amount: number; status: 'pending' | 'paid' | 'failed' }
 
 export async function mirrorPromoted(
-  tx: TenantTx, tenantId: string, def: CollectionDef, docId: string, doc: Record<string, unknown>,
+  tx: TenantTx, def: CollectionDef, docId: string, doc: Record<string, unknown>,
 ): Promise<void> {
   if (!def.promoted) return;
 
@@ -22,11 +22,11 @@ export async function mirrorPromoted(
       const votes = (doc.votes ?? {}) as Record<string, VoteTally>;
       for (const [stage, tally] of Object.entries(votes)) {
         await tx.insert(voteRecords).values({
-          tenantId, docId, stage,
+          docId, stage,
           yes: tally.yes ?? 0, no: tally.no ?? 0, abstain: tally.abstain ?? 0, absent: tally.absent ?? 0,
           date: tally.date ?? null,
         }).onConflictDoUpdate({
-          target: [voteRecords.tenantId, voteRecords.docId, voteRecords.stage],
+          target: [voteRecords.docId, voteRecords.stage],
           set: {
             yes: tally.yes ?? 0, no: tally.no ?? 0, abstain: tally.abstain ?? 0, absent: tally.absent ?? 0,
             date: tally.date ?? null, updatedAt: new Date(),
@@ -45,9 +45,9 @@ export async function mirrorPromoted(
       const paidAt = typeof doc.paidAt === 'string' ? new Date(doc.paidAt) : null;
       if (applicationRef) {
         await tx.insert(paymentOrders).values({
-          tenantId, id: docId, ref, applicationRef, totalAmount: total, status, paidAt,
+          id: docId, ref, applicationRef, totalAmount: total, status, paidAt,
         }).onConflictDoUpdate({
-          target: [paymentOrders.tenantId, paymentOrders.id],
+          target: [paymentOrders.id],
           set: { ref, totalAmount: total, status, paidAt },
         });
       }
@@ -55,10 +55,10 @@ export async function mirrorPromoted(
       for (const p of rows) {
         if (!p.id) continue;
         await tx.insert(payments).values({
-          tenantId, id: p.id, orderId: docId, method: p.method,
+          id: p.id, orderId: docId, method: p.method,
           orNo: p.orNo ?? null, amount: Number(p.amount ?? 0), status: p.status,
         }).onConflictDoUpdate({
-          target: [payments.tenantId, payments.id],
+          target: [payments.id],
           set: { orNo: p.orNo ?? null, amount: Number(p.amount ?? 0), status: p.status },
         });
       }
@@ -68,9 +68,9 @@ export async function mirrorPromoted(
     // ── Zone capacity counter (authoritative `used`) ──────────────────────────
     case 'sp.mtop.zones': {
       const used = Number(doc.used ?? 0);
-      await tx.insert(zoneCounters).values({ tenantId, zoneId: docId, used })
+      await tx.insert(zoneCounters).values({ zoneId: docId, used })
         .onConflictDoUpdate({
-          target: [zoneCounters.tenantId, zoneCounters.zoneId],
+          target: [zoneCounters.zoneId],
           set: { used, updatedAt: new Date() },
         });
       return;
@@ -82,9 +82,9 @@ export async function mirrorPromoted(
 }
 
 /** Read the live zone counter (for capacity checks in the prangkisa UI/API). */
-export async function zoneUsage(tx: TenantTx, tenantId: string, zoneId: string): Promise<number> {
-  const rows = await tx.select().from(zoneCounters).where(and(
-    eq(zoneCounters.tenantId, tenantId), eq(zoneCounters.zoneId, zoneId),
-  )).limit(1);
+export async function zoneUsage(tx: TenantTx, zoneId: string): Promise<number> {
+  const rows = await tx.select().from(zoneCounters).where(
+    eq(zoneCounters.zoneId, zoneId),
+  ).limit(1);
   return rows[0]?.used ?? 0;
 }
