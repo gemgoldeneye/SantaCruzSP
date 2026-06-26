@@ -21,10 +21,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    void restoreSession().then((res) => {
-      if (res) setUser(res.user);
-      setReady(true);
-    });
+    // Always flip `ready`, even on an unexpected throw — otherwise the staff
+    // shell's LoadingScreen ("Opening the app…") stays up forever instead of
+    // falling through to the /login redirect.
+    void restoreSession()
+      .then((res) => { if (res) setUser(res.user); })
+      .catch((err) => { console.error('restoreSession failed', err); })
+      .finally(() => { setReady(true); });
   }, []);
 
   const value: AuthCtx = {

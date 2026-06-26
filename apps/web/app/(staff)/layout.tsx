@@ -53,9 +53,11 @@ export default function StaffLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    void bootSync({ apiBase: '', appKey: 'sp' }).then(() => {
-      if (active) setBooted(true);
-    });
+    // Never let a boot failure (e.g. IndexedDB blocked) hang the splash forever —
+    // unlock the gate either way so the auth flow (and /login) can still run.
+    void bootSync({ apiBase: '', appKey: 'sp' })
+      .catch((err) => { console.error('bootSync failed', err); })
+      .finally(() => { if (active) setBooted(true); });
     return () => { active = false; };
   }, []);
 
