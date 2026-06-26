@@ -11,14 +11,25 @@ declare module 'fastify' {
   }
 }
 
-/** preHandler: requires a live session; populates request.user. */
+/** preHandler: requires a live session; populates request.user.
+ *  A present-but-dead cookie (bad signature / expired/destroyed session) is
+ *  CLEARED on the 401: the edge proxy redirects on cookie PRESENCE only, so a
+ *  stale-but-present cookie would otherwise trap the user in a /login ↔ /
+ *  redirect loop they can't escape (logout needs a live session). Clearing it
+ *  here lets the very next /auth/me strip the dead cookie via Set-Cookie. */
 export async function requireUser(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   const raw = req.cookies[SESSION_COOKIE];
   if (!raw) { await reply.code(401).send({ error: 'unauthenticated' }); return; }
   const unsigned = req.unsignCookie(raw);
-  if (!unsigned.valid || !unsigned.value) { await reply.code(401).send({ error: 'unauthenticated' }); return; }
+  if (!unsigned.valid || !unsigned.value) {
+    await reply.clearCookie(SESSION_COOKIE, { path: '/' }).code(401).send({ error: 'unauthenticated' });
+    return;
+  }
   const session = await getSession(unsigned.value);
-  if (!session) { await reply.code(401).send({ error: 'session_expired' }); return; }
+  if (!session) {
+    await reply.clearCookie(SESSION_COOKIE, { path: '/' }).code(401).send({ error: 'session_expired' });
+    return;
+  }
   req.user = session.user;
   req.sessionId = unsigned.value;
 }
