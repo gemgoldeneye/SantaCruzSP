@@ -92,7 +92,13 @@ export function DocumentScanner() {
     setProgress(0);
     try {
       const Tesseract = await import("tesseract.js");
+      // Self-hosted engine assets (public/tesseract/, precached by the service
+      // worker) so OCR runs fully offline — no CDN fetch for the WASM core or
+      // the eng.traineddata language model.
       const worker = await Tesseract.createWorker("eng", 1, {
+        workerPath: "/tesseract/worker.min.js",
+        corePath: "/tesseract",
+        langPath: "/tesseract",
         logger: (m) => {
           if (m.status === "recognizing text") {
             setProgress(Math.round(m.progress * 100));
